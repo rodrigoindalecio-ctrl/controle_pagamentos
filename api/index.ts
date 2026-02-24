@@ -358,10 +358,67 @@ app.post("/api/payments", async (req, res) => {
 
 app.patch("/api/brides/:id/status", async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body;
-    const { error } = await supabase.from("brides").update({ status }).eq("id", id);
-    if (error) return res.status(500).json(error);
-    res.json({ success: true });
+    const body = req.body;
+    const brideIdNum = Number(id);
+
+    const toNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        let s = val.toString().replace(/[R$\s]/g, '');
+        if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+        else if (s.includes(',')) s = s.replace(',', '.');
+        return parseFloat(s) || 0;
+    };
+
+    // V4: Lógica de Detecção por Dados (mais robusta que por texto)
+    const isDistrato = body.fine_amount !== undefined;
+
+    try {
+        if (isDistrato) {
+            const fine = toNum(body.fine_amount);
+            const original = toNum(body.original_value);
+
+            // 1. Pega pagamentos para o saldo
+            const { data: payments } = await supabase
+                .from("payments")
+                .select("amount_paid")
+                .eq("bride_id", brideIdNum)
+                .ilike("status", "pago");
+
+            const totalPaid = (payments || []).reduce((sum, p) => sum + toNum(p.amount_paid), 0);
+            const newBalance = Math.max(0, fine - totalPaid);
+
+            const updateData = {
+                status: 'Cancelado',
+                contract_value: fine,
+                original_value: original,
+                balance: newBalance
+            };
+
+            console.log(`[V4 DISTRATO] ID ${id}:`, updateData);
+
+            // 2. Update Atômico
+            const { error } = await supabase
+                .from("brides")
+                .update(updateData)
+                .eq("id", brideIdNum);
+
+            if (error) throw error;
+            return res.json({ success: true, version: 'V4', type: 'distrato', updateData });
+        }
+
+        // Fluxo normal
+        const { error } = await supabase
+            .from("brides")
+            .update({ status: body.status })
+            .eq("id", brideIdNum);
+
+        if (error) throw error;
+        res.json({ success: true, version: 'V4', type: 'status_only' });
+    } catch (err) {
+        console.error("[V4 ERROR]:", err);
+        res.status(500).json({ error: err });
+    }
 });
 
 app.put("/api/brides/:id", async (req, res) => {

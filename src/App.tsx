@@ -117,32 +117,36 @@ const Header = ({ title, subtitle }: { title: string, subtitle: string }) => (
   </header>
 );
 
-const StatCard = ({ label, value, icon: Icon, trend, color, children }: { label: string, value: string, icon: any, trend?: string, color: string, children?: React.ReactNode }) => (
-  <div className="bg-white p-4 lg:p-6 rounded-xl border border-[#883545]/10 shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:border-[#883545]/30 transition-all">
-    <div className="flex justify-between items-start relative z-10">
-      <span className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">{label}</span>
-      <div className={`p-2 rounded-lg bg-slate-50 ${color} group-hover:scale-110 transition-transform`}>
-        <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+const StatCard = ({ label, value, icon: Icon, trend, color, children }: { label: string, value: string, icon: any, trend?: string, color: string, children?: React.ReactNode }) => {
+  const isNegativeValue = value.includes('-') || (label === "Saldo Líquido" && parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.')) < 0);
+
+  return (
+    <div className="bg-white p-4 lg:p-6 rounded-xl border border-[#883545]/10 shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:border-[#883545]/30 transition-all">
+      <div className="flex justify-between items-start relative z-10">
+        <span className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">{label}</span>
+        <div className={`p-2 rounded-lg bg-slate-50 ${color} group-hover:scale-110 transition-transform`}>
+          <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+        </div>
+      </div>
+      <div className="relative z-10">
+        <p className={`text-lg lg:text-2xl font-black leading-none mb-1 ${isNegativeValue ? 'text-rose-600' : 'text-slate-900'}`}>{value}</p>
+        {trend && (
+          <div className={`flex items-center gap-1 text-[10px] font-bold ${trend.startsWith('+') ? 'text-emerald-600' :
+            trend.startsWith('-') ? 'text-rose-600' :
+              'text-slate-400'
+            }`}>
+            {trend.startsWith('-') ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+            <span>{trend}</span>
+          </div>
+        )}
+      </div>
+      {children && <div className="mt-2 pt-2 border-t border-slate-50 relative z-10">{children}</div>}
+      <div className={`absolute -right-2 -bottom-2 w-16 h-16 ${color} opacity-[0.03] group-hover:scale-125 transition-transform`}>
+        <Icon className="w-full h-full" />
       </div>
     </div>
-    <div className="relative z-10">
-      <p className="text-lg lg:text-2xl font-black text-slate-900 leading-none mb-1">{value}</p>
-      {trend && (
-        <div className={`flex items-center gap-1 text-[10px] font-bold ${label === "Despesas"
-          ? (trend.startsWith('-') ? 'text-emerald-600' : trend.startsWith('+') ? 'text-rose-600' : 'text-slate-400')
-          : (trend.startsWith('+') ? 'text-emerald-600' : trend.startsWith('-') ? 'text-rose-600' : 'text-slate-400')
-          }`}>
-          {trend.startsWith('-') ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-          <span>{trend}</span>
-        </div>
-      )}
-    </div>
-    {children && <div className="mt-2 pt-2 border-t border-slate-50 relative z-10">{children}</div>}
-    <div className={`absolute -right-2 -bottom-2 w-16 h-16 ${color} opacity-[0.03] group-hover:scale-125 transition-transform`}>
-      <Icon className="w-full h-full" />
-    </div>
-  </div>
-);
+  );
+};
 
 const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, key?: string }) => {
   if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
@@ -167,15 +171,15 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
         >
           {stats.activeBridesBreakdown && (
             <div className="space-y-1">
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2026:</span>
                 <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2026}</span>
               </div>
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2027:</span>
                 <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2027}</span>
               </div>
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2028:</span>
                 <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2028}</span>
               </div>
@@ -193,15 +197,15 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
           {stats.pendingBreakdown && (
             <div className="space-y-1">
 
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2026:</span>
                 <span className="text-amber-600">R$ {stats.pendingBreakdown.year2026.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2027:</span>
                 <span className="text-amber-600">R$ {stats.pendingBreakdown.year2027.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
                 <span className="text-slate-400">2028:</span>
                 <span className="text-amber-600">R$ {stats.pendingBreakdown.year2028.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
@@ -303,12 +307,97 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
 
 // --- Brides View ---
 
-const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string) => void, onDelete: (id: number) => void, key?: string }) => {
+const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments }: { isOpen: boolean, onClose: () => void, onConfirm: (fine: number) => void, bride: Bride | null, payments: Payment[] }) => {
+  const [fine, setFine] = useState(0);
+
+  useEffect(() => {
+    if (bride && isOpen) {
+      const eventDate = new Date(bride.event_date);
+      const today = new Date();
+      const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+      const suggestedPercent = diffDays > 30 ? 0.5 : 1.0;
+      setFine(bride.contract_value * suggestedPercent);
+    }
+  }, [bride, isOpen]);
+
+  if (!bride) return null;
+
+  const totalPaid = payments
+    .filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago')
+    .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+  const pendingFine = Math.max(0, fine - totalPaid);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+          <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-[#883545]/10">
+            <div className="bg-[#883545]/5 p-6 border-b border-[#883545]/10 text-center">
+              <div className="size-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <XCircle className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-black text-slate-800">Distrato Comercial (V4)</h3>
+              <p className="text-xs font-medium text-slate-500 mt-1">{bride.name}</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Contratado</p>
+                  <p className="text-sm font-black text-slate-700">R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Pago Até Hoje</p>
+                  <p className="text-sm font-black text-emerald-600">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor Acordado da Multa (R$)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(fine)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFine(Number(val) / 100);
+                    }}
+                    className="w-full pl-6 pr-4 py-4 bg-rose-50 border-2 border-rose-100 rounded-2xl text-lg font-black text-rose-600 focus:ring-4 focus:ring-rose-500/10 focus:border-rose-300 transition-all outline-none"
+                  />
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 italic px-1">
+                  *Sugestão baseada na data do evento: {fine >= bride.contract_value ? '100%' : '50%'}
+                </p>
+              </div>
+
+              <div className="bg-rose-600 p-4 rounded-xl text-white shadow-lg shadow-rose-600/20">
+                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Saldo Devedor da Multa</p>
+                <p className="text-xl font-black">R$ {pendingFine.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-3 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">Desistir</button>
+              <button onClick={() => onConfirm(fine)} className="flex-[2] py-4 bg-rose-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/20 active:scale-95 transition-all">Confirmar Distrato</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, key?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [yearFilter, setYearFilter] = useState('Todos');
   const [balanceFilter, setBalanceFilter] = useState('Todos');
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
+  const [brideForDistrato, setBrideForDistrato] = useState<Bride | null>(null);
 
   const calculateBalance = (bride: Bride) => {
     const totalPaid = payments
@@ -456,7 +545,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                         <button onClick={() => onUpdateStatus(bride.id, 'Inativa')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                           <UserMinus className="w-3.5 h-3.5" /> Inativar
                         </button>
-                        <button onClick={() => onUpdateStatus(bride.id, 'Cancelado')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                        <button onClick={() => { setBrideForDistrato(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                           <XCircle className="w-3.5 h-3.5" /> Cancelar
                         </button>
                         <div className="h-px bg-slate-50 my-1" />
@@ -484,12 +573,19 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Contrato</p>
                     <p className="text-xs font-bold text-slate-700">R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
+                  {bride.status === 'Cancelado' && bride.original_value > 0 && (
+                    <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                      <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest leading-none">Dedução Comercial (Distrato)</p>
+                      <p className="text-xs font-bold text-slate-500 line-through">Original: R$ {bride.original_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-sm font-black text-rose-600">Multa Acordada: R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo Pago</p>
                     <p className="text-xs font-bold text-emerald-600">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[9px] font-black text-[#883545] uppercase tracking-widest">Saldo Devedor</p>
+                    <p className="text-[9px] font-black text-[#883545] uppercase tracking-widest">Saldo Devedor {bride.status === 'Cancelado' ? '(Multa)' : ''}</p>
                     <p className="text-sm font-black text-[#883545]">R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
                   <div className="space-y-1 flex flex-col justify-end">
@@ -549,7 +645,14 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                         {bride.service_type || 'Não definido'}
                       </td>
                       <td className="px-4 lg:px-6 py-4 text-xs lg:text-sm font-black text-slate-700">
-                        R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {bride.status === 'Cancelado' && bride.original_value > 0 ? (
+                          <div className="flex flex-col">
+                            <span className="text-rose-600">Multa: R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-[10px] text-slate-400 line-through font-medium">Orig: R$ {bride.original_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        ) : (
+                          <>R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
+                        )}
                       </td>
                       <td className="px-4 lg:px-6 py-4 text-xs lg:text-sm font-bold text-emerald-600">
                         R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -589,7 +692,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                             <button onClick={() => { onUpdateStatus(bride.id, 'Inativa'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                               <UserMinus className="w-3.5 h-3.5" /> Inativar
                             </button>
-                            <button onClick={() => { onUpdateStatus(bride.id, 'Cancelado'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                            <button onClick={() => { setBrideForDistrato(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                               <XCircle className="w-3.5 h-3.5" /> Cancelar
                             </button>
                             <div className="h-px bg-slate-50 my-1" />
@@ -610,6 +713,21 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
 
       {/* Overlay to close menus */}
       {openMenuId && <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />}
+      <DistratoModal
+        isOpen={isDistratoModalOpen}
+        onClose={() => setIsDistratoModalOpen(false)}
+        bride={brideForDistrato}
+        payments={payments}
+        onConfirm={(fine) => {
+          if (brideForDistrato) {
+            onUpdateStatus(brideForDistrato.id, 'Cancelado', {
+              fine_amount: fine,
+              original_value: brideForDistrato.contract_value
+            });
+            setIsDistratoModalOpen(false);
+          }
+        }}
+      />
     </motion.div >
   );
 };
@@ -633,9 +751,14 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
     e.preventDefault();
     if (type === 'entrada') {
       const isBV = revenueSegment === 'bv';
+      const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
+      const isCancellation = selectedBride?.status === 'Cancelado';
+
       onAddPayment({
         bride_id: isBV ? 58 : formData.bride_id,
-        description: isBV ? `[BV] ${formData.partner_name} - ${formData.description}` : formData.description,
+        description: isBV
+          ? `[BV] ${formData.partner_name} - ${formData.description}`
+          : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
         amount_paid: Number(formData.amount),
         payment_date: formData.date,
         status: 'Pago'
@@ -665,7 +788,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
     .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
 
   const totalPendente = brides
-    .filter(b => b.status === 'Ativa' && b.id !== 58)
+    .filter(b => (b.status === 'Ativa' || b.status === 'Cancelado') && b.id !== 58)
     .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   return (
@@ -736,9 +859,16 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                     >
                       <option value="">Selecione um cliente...</option>
                       {brides
-                        .filter(b => b.status === 'Ativa' && b.id !== 58)
+                        .filter(b => {
+                          if (b.id === 58) return false;
+                          if (b.status === 'Ativa') return true;
+                          if (b.status === 'Cancelado' && b.balance >= 1) return true;
+                          return false;
+                        })
                         .map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
+                          <option key={b.id} value={b.id}>
+                            {b.name} {b.status === 'Cancelado' ? '(Cancelado/Multa)' : ''}
+                          </option>
                         ))}
                     </select>
                   </div>
@@ -1130,12 +1260,16 @@ export default function App() {
     }
   };
 
-  const handleUpdateBrideStatus = async (id: number, status: string) => {
+  const handleUpdateBrideStatus = async (id: number, status: string, options: any = {}) => {
     try {
       const res = await fetch(`/api/brides/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({
+          status,
+          fine_amount: options.fine_amount,
+          original_value: options.original_value
+        })
       });
       if (res.ok) fetchData();
     } catch (e) {
