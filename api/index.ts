@@ -20,6 +20,14 @@ app.use(express.json());
 // API Routes
 app.get("/api/dashboard/stats", async (req, res) => {
     try {
+        // Auto-complete past events
+        const todayStr = new Date().toISOString().split('T')[0];
+        await supabase
+            .from("brides")
+            .update({ status: 'Concluído' })
+            .lt("event_date", todayStr)
+            .eq("status", "Ativa");
+
         const { count: activeBrides } = await supabase
             .from("brides")
             .select("*", { count: "exact", head: true })
