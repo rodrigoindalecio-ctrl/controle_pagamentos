@@ -1,4 +1,4 @@
-import { startServer } from "./api/main.ts";
+import { startServer } from "./api/index.ts";
 
 if (!process.env.VERCEL) {
   startServer();
