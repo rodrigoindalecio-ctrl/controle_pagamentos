@@ -13,7 +13,14 @@ import {
   LayoutDashboard,
   Heart,
   LogOut,
-  CircleDollarSign
+  CircleDollarSign,
+  Edit,
+  Trash2,
+  Filter,
+  ChevronDown,
+  CheckCircle,
+  XCircle,
+  UserMinus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -58,8 +65,17 @@ interface MonthlyStat {
 
 interface DashboardStats {
   activeBrides: number;
+  activeBridesBreakdown?: {
+    year2026: number;
+    year2027: number;
+    year2028: number;
+  };
   activeBridesTrend: string;
   monthlyRevenue: number;
+  revenueBreakdown?: {
+    assessoria: number;
+    bv: number;
+  };
   revenueTrend: string;
   pendingPayments: number;
   pendingBreakdown?: {
@@ -143,7 +159,30 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
       <Header title="Olá, Rodrigo! 👋" subtitle="Aqui está o resumo da sua assessoria de casamentos hoje." />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
-        <StatCard label="Noivas Ativas" value={stats.activeBrides.toString()} icon={Users} color="text-[#883545]" />
+        <StatCard
+          label="Eventos Ativos Mês"
+          value={stats.activeBrides.toString()}
+          icon={Users}
+          color="text-[#883545]"
+        >
+          {stats.activeBridesBreakdown && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2026:</span>
+                <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2026}</span>
+              </div>
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2027:</span>
+                <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2027}</span>
+              </div>
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2028:</span>
+                <span className="text-[#883545] font-black">{stats.activeBridesBreakdown.year2028}</span>
+              </div>
+            </div>
+          )}
+        </StatCard>
+
         <StatCard label="Receita (Mês)" value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} trend={`${stats.revenueTrend} vs anterior`} color="text-emerald-500" />
         <StatCard
           label="Pendentes Mês"
@@ -253,7 +292,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
               onClick={onViewAll}
               className="mt-4 lg:mt-6 w-full py-3 lg:py-4 border-2 border-[#883545]/5 text-[#883545] text-xs lg:text-sm font-black rounded-xl hover:bg-[#883545] hover:text-white transition-all uppercase tracking-widest"
             >
-              Ver Todas noivas
+              Ver Todos Clientes
             </button>
           </div>
         </div>
@@ -264,7 +303,13 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
 
 // --- Brides View ---
 
-const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Payment[], onAdd: () => void, key?: string }) => {
+const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string) => void, onDelete: (id: number) => void, key?: string }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('Todos');
+  const [yearFilter, setYearFilter] = useState('Todos');
+  const [balanceFilter, setBalanceFilter] = useState('Todos');
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+
   const calculateBalance = (bride: Bride) => {
     const totalPaid = payments
       .filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago')
@@ -275,6 +320,18 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
     };
   };
 
+  const filteredBrides = brides.filter(b => {
+    if (b.id === 58) return false; // Esconde o cliente de BV da lista
+    const matchesSearch = b.name.toLowerCase().includes(searchTerm.toLowerCase()) || (b.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;
+    const matchesYear = yearFilter === 'Todos' || (b.event_date || '').startsWith(yearFilter);
+    const matchesBalance = balanceFilter === 'Todos' || (balanceFilter === 'Com Pendência' ? b.balance > 1 : b.balance <= 1);
+
+    return matchesSearch && matchesStatus && matchesYear && matchesBalance;
+  });
+
+  const years = Array.from(new Set(brides.map(b => (b.event_date || '').split('-')[0]).filter(Boolean))).sort();
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
@@ -282,23 +339,90 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
       className="space-y-6"
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <Header title="Lista de Noivas" subtitle={`Gerencie suas ${brides.length} clientes ativas e inativas.`} />
+        <Header title="Lista de Clientes" subtitle={`Gerencie seus ${brides.filter(b => b.id !== 58).length} clientes ativos e inativos.`} />
+      </div>
+
+      {/* Sugestão de Filtros */}
+      <div className="bg-white p-4 rounded-2xl border border-[#883545]/10 shadow-sm flex flex-col md:flex-row gap-4 items-end">
+        <div className="flex-1 w-full space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Buscar Cliente</label>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Nome ou email..."
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="w-full md:w-40 space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
+          <div className="relative">
+            <select
+              className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option>Todos</option>
+              <option>Ativa</option>
+              <option>Concluído</option>
+              <option>Inativa</option>
+              <option>Cancelado</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="w-full md:w-32 space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ano</label>
+          <div className="relative">
+            <select
+              className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+            >
+              <option>Todos</option>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="w-full md:w-48 space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Saldo</label>
+          <div className="relative">
+            <select
+              className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+              value={balanceFilter}
+              onChange={(e) => setBalanceFilter(e.target.value)}
+            >
+              <option>Todos</option>
+              <option>Com Pendência</option>
+              <option>Sem Pendência</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
         <button
-          onClick={onAdd}
-          className="flex items-center gap-2 bg-[#883545] text-white px-5 py-3 lg:px-6 lg:py-3.5 rounded-xl font-bold shadow-lg shadow-[#883545]/20 hover:scale-105 active:scale-95 transition-all text-sm"
+          onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); setYearFilter('Todos'); setBalanceFilter('Todos'); }}
+          className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
+          title="Limpar Filtros"
         >
-          <Plus className="w-4 h-4" />
-          <span>NOVO EVENTO</span>
+          <Filter className="w-5 h-5" />
         </button>
       </div>
 
       <div className="lg:hidden space-y-4">
-        {brides.length === 0 ? (
+        {filteredBrides.length === 0 ? (
           <div className="bg-white p-12 rounded-2xl border border-[#883545]/10 shadow-sm text-center text-slate-400 italic font-medium">
-            Nenhuma noiva cadastrada.
+            Nenhum cliente encontrado com os filtros aplicados.
           </div>
         ) : (
-          brides.map((bride) => {
+          filteredBrides.map((bride) => {
             const { totalPaid, balance } = calculateBalance(bride);
             return (
               <div key={bride.id} className="bg-white p-5 rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative overflow-hidden group">
@@ -309,9 +433,39 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
                     <h3 className="text-base font-black text-slate-900 leading-tight group-hover:text-[#883545] transition-colors">{bride.name}</h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{bride.email}</p>
                   </div>
-                  <button className="p-2 -mr-2 text-slate-300 hover:text-[#883545] transition-colors">
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === bride.id ? null : bride.id)}
+                      className="p-2 -mr-2 text-slate-300 hover:text-[#883545] transition-colors"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+                    {openMenuId === bride.id && (
+                      <div className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-2xl border border-[#883545]/10 z-50 p-2 space-y-1 animate-in fade-in zoom-in duration-200">
+                        <p className="px-3 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</p>
+                        <button onClick={() => { onEdit(bride); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
+                          <Edit className="w-3.5 h-3.5" /> Editar Cliente
+                        </button>
+                        <div className="h-px bg-slate-50 my-1" />
+                        <button onClick={() => onUpdateStatus(bride.id, 'Ativa')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors">
+                          <CheckCircle className="w-3.5 h-3.5" /> Tornar Ativa
+                        </button>
+                        <button onClick={() => onUpdateStatus(bride.id, 'Concluído')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                          <CheckCircle className="w-3.5 h-3.5" /> Concluir Evento
+                        </button>
+                        <button onClick={() => onUpdateStatus(bride.id, 'Inativa')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                          <UserMinus className="w-3.5 h-3.5" /> Inativar
+                        </button>
+                        <button onClick={() => onUpdateStatus(bride.id, 'Cancelado')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                          <XCircle className="w-3.5 h-3.5" /> Cancelar
+                        </button>
+                        <div className="h-px bg-slate-50 my-1" />
+                        <button onClick={() => onDelete(bride.id)} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" /> Excluir Cliente
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-2 border-t border-slate-50">
@@ -354,12 +508,12 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
         )}
       </div>
 
-      <div className="hidden lg:block bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden">
+      <div className="hidden lg:block bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden min-h-[400px]">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[10px] lg:text-xs uppercase tracking-wider font-bold border-b border-[#883545]/5">
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Noiva / Casal</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-5">Cliente / Casal</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Data Evento</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Serviço</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Valor Contrato</th>
@@ -370,12 +524,12 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
               </tr>
             </thead>
             <tbody className="divide-y divide-[#883545]/5 font-medium">
-              {brides.length === 0 ? (
+              {filteredBrides.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">Nenhuma noiva cadastrada.</td>
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 italic font-bold">Nenhum cliente encontrado com estes filtros.</td>
                 </tr>
               ) : (
-                brides.map((bride) => {
+                filteredBrides.map((bride) => {
                   const { totalPaid, balance } = calculateBalance(bride);
                   return (
                     <tr key={bride.id} className="hover:bg-[#883545]/5 transition-colors group">
@@ -412,10 +566,38 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
                           {bride.status}
                         </span>
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-center">
-                        <button className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-[#883545] transition-all">
+                      <td className="px-4 lg:px-6 py-4 text-center relative">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === bride.id ? null : bride.id)}
+                          className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-[#883545] transition-all"
+                        >
                           <MoreVertical className="w-5 h-5" />
                         </button>
+                        {openMenuId === bride.id && (
+                          <div className="absolute right-0 top-14 w-48 bg-white rounded-xl shadow-2xl border border-[#883545]/10 z-50 p-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <p className="px-3 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</p>
+                            <button onClick={() => { onEdit(bride); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
+                              <Edit className="w-3.5 h-3.5" /> Editar Cliente
+                            </button>
+                            <div className="h-px bg-slate-50 my-1" />
+                            <button onClick={() => { onUpdateStatus(bride.id, 'Ativa'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors">
+                              <CheckCircle className="w-3.5 h-3.5" /> Tornar Ativa
+                            </button>
+                            <button onClick={() => { onUpdateStatus(bride.id, 'Concluído'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                              <CheckCircle className="w-3.5 h-3.5" /> Concluir Evento
+                            </button>
+                            <button onClick={() => { onUpdateStatus(bride.id, 'Inativa'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                              <UserMinus className="w-3.5 h-3.5" /> Inativar
+                            </button>
+                            <button onClick={() => { onUpdateStatus(bride.id, 'Cancelado'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                              <XCircle className="w-3.5 h-3.5" /> Cancelar
+                            </button>
+                            <div className="h-px bg-slate-50 my-1" />
+                            <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" /> Excluir Cliente
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -425,17 +607,22 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
           </table>
         </div>
       </div>
+
+      {/* Overlay to close menus */}
+      {openMenuId && <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />}
     </motion.div >
   );
 };
 
 // --- Finance View ---
 
-const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
+const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
+  const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
     bride_id: '',
     description: '',
+    partner_name: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     status: 'Pago',
@@ -445,12 +632,13 @@ const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }:
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (type === 'entrada') {
+      const isBV = revenueSegment === 'bv';
       onAddPayment({
-        bride_id: formData.bride_id,
-        description: formData.description,
+        bride_id: isBV ? 58 : formData.bride_id,
+        description: isBV ? `[BV] ${formData.partner_name} - ${formData.description}` : formData.description,
         amount_paid: Number(formData.amount),
         payment_date: formData.date,
-        status: formData.status
+        status: 'Pago'
       });
     } else {
       onAddExpense({
@@ -463,20 +651,22 @@ const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }:
     setFormData({
       bride_id: '',
       description: '',
+      partner_name: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       status: 'Pago',
       category: 'Geral'
     });
+    setRevenueSegment('assessoria');
   };
 
   const totalRecebido = payments
     .filter(p => (p.status || '').trim().toLowerCase() === 'pago')
     .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
 
-  const totalPendente = payments
-    .filter(p => (p.status || '').trim().toLowerCase() !== 'pago')
-    .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+  const totalPendente = brides
+    .filter(b => b.status === 'Ativa' && b.id !== 58)
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   return (
     <motion.div
@@ -514,41 +704,58 @@ const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }:
               <Plus className={`w-5 h-5 ${type === 'entrada' ? 'text-[#883545]' : 'text-rose-500'}`} />
               {type === 'entrada' ? 'Registrar Parcela' : 'Lançar Despesa'}
             </h3>
+
+            {type === 'entrada' && (
+              <div className="flex gap-2 mb-6 p-1 bg-white rounded-xl border border-[#883545]/10">
+                <button
+                  type="button"
+                  onClick={() => setRevenueSegment('assessoria')}
+                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'assessoria' ? 'bg-slate-100 text-[#883545]' : 'text-slate-400'}`}
+                >
+                  Assessoria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevenueSegment('bv')}
+                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'bv' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400'}`}
+                >
+                  Bonificação (BV)
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-5">
               {type === 'entrada' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Noiva / Casal</label>
-                  <select
-                    required
-                    value={formData.bride_id}
-                    onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
-                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium transition-all"
-                  >
-                    <option value="">Selecione um cliente...</option>
-                    {brides
-                      .filter(b => b.status === 'Ativa')
-                      .map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                  </select>
-                </div>
+                revenueSegment === 'assessoria' ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente</label>
+                    <select
+                      required
+                      value={formData.bride_id}
+                      onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
+                      className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium transition-all"
+                    >
+                      <option value="">Selecione um cliente...</option>
+                      {brides
+                        .filter(b => b.status === 'Ativa' && b.id !== 58)
+                        .map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Parceiro / Fornecedor</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Ex: Papelaria Modelo, Buffet X"
+                      value={formData.partner_name}
+                      onChange={(e) => setFormData({ ...formData, partner_name: e.target.value })}
+                      className="w-full rounded-lg border-[#883545]/20 bg-emerald-50/30 text-sm p-2.5 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                    />
+                  </div>
+                )
               )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Noiva / Casal</label>
-                <select
-                  required
-                  value={formData.bride_id}
-                  onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
-                  className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium transition-all"
-                >
-                  <option value="">Selecione um cliente...</option>
-                  {brides
-                    .filter(b => b.status === 'Ativa')
-                    .map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                </select>
-              </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</label>
                 <input
@@ -584,20 +791,7 @@ const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }:
                   />
                 </div>
               </div>
-              {type === 'entrada' ? (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
-                  >
-                    <option value="Pendente">Pendente</option>
-                    <option value="Pago">Pago</option>
-                    <option value="Vencido">Vencido</option>
-                  </select>
-                </div>
-              ) : (
+              {type === 'saida' && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</label>
                   <select
@@ -724,7 +918,7 @@ const SettingsView = ({ key }: { key?: string }) => (
   </motion.div>
 );
 
-const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () => void, onAdd: (bride: any) => void }) => {
+const BrideModal = ({ isOpen, onClose, onSave, brideToEdit }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -733,6 +927,28 @@ const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () =
     contract_value: '',
     original_value: ''
   });
+
+  useEffect(() => {
+    if (brideToEdit) {
+      setFormData({
+        name: brideToEdit.name || '',
+        email: brideToEdit.email || '',
+        event_date: brideToEdit.event_date ? brideToEdit.event_date.split('T')[0] : '',
+        service_type: brideToEdit.service_type || '',
+        contract_value: brideToEdit.contract_value?.toString() || '',
+        original_value: brideToEdit.original_value?.toString() || ''
+      });
+    } else {
+      setFormData({
+        name: '',
+        email: '',
+        event_date: '',
+        service_type: '',
+        contract_value: '',
+        original_value: ''
+      });
+    }
+  }, [brideToEdit, isOpen]);
 
   if (!isOpen) return null;
 
@@ -747,24 +963,37 @@ const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () =
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative z-10 overflow-hidden"
       >
-        <div className="bg-[#883545] p-6 text-white text-center">
+        <div className="bg-[#883545] p-6 text-white text-center relative">
+          <button onClick={onClose} className="absolute right-4 top-4 p-2 hover:bg-white/10 rounded-full transition-colors">
+            <XCircle className="w-5 h-5" />
+          </button>
           <Heart className="w-10 h-10 mx-auto mb-3 opacity-80" />
-          <h2 className="text-2xl font-black uppercase tracking-widest">Novo Evento</h2>
+          <h2 className="text-2xl font-black uppercase tracking-widest">{brideToEdit ? 'Editar Evento' : 'Novo Evento'}</h2>
         </div>
 
         <form className="p-6 lg:p-8 space-y-4 lg:space-y-6" onSubmit={(e) => {
           e.preventDefault();
-          onAdd(formData);
+          onSave(formData);
           onClose();
         }}>
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome da Noiva / Casal</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome do Cliente / Casal</label>
               <input
                 required
                 className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">E-mail</label>
+              <input
+                type="email"
+                placeholder="email@exemplo.com"
+                className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -793,6 +1022,7 @@ const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () =
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Contrato (R$)</label>
                 <input
                   type="number"
+                  step="0.01"
                   placeholder="0,00"
                   className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-black text-[#883545] shadow-inner"
                   value={formData.contract_value}
@@ -803,6 +1033,7 @@ const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () =
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor Original (R$)</label>
                 <input
                   type="number"
+                  step="0.01"
                   placeholder="0,00"
                   className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm text-slate-400 line-through font-bold shadow-inner"
                   value={formData.original_value}
@@ -813,7 +1044,7 @@ const BrideModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () =
           </div>
 
           <button type="submit" className="w-full bg-[#883545] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-xl shadow-[#883545]/20 hover:bg-[#883545]/90 hover:-translate-y-1 transition-all">
-            Salvar Cadastro
+            {brideToEdit ? 'Atualizar Cliente' : 'Salvar Cadastro'}
           </button>
         </form>
       </motion.div>
@@ -830,6 +1061,7 @@ export default function App() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
+  const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
 
   const fetchData = async () => {
     try {
@@ -853,14 +1085,20 @@ export default function App() {
     fetchData();
   }, []);
 
-  const handleAddBride = async (brideData: any) => {
+  const handleSaveBride = async (brideData: any) => {
     try {
-      const res = await fetch('/api/brides', {
-        method: 'POST',
+      const url = brideToEdit ? `/api/brides/${brideToEdit.id}` : '/api/brides';
+      const method = brideToEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(brideData)
       });
-      if (res.ok) fetchData();
+      if (res.ok) {
+        fetchData();
+        setBrideToEdit(null);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -892,6 +1130,29 @@ export default function App() {
     }
   };
 
+  const handleUpdateBrideStatus = async (id: number, status: string) => {
+    try {
+      const res = await fetch(`/api/brides/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteBride = async (id: number) => {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+    try {
+      const res = await fetch(`/api/brides/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[#FDF8F8] text-slate-900 overflow-hidden font-sans">
       {/* Desktop Sidebar */}
@@ -908,7 +1169,7 @@ export default function App() {
 
         <nav className="flex-1 space-y-2">
           <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <SidebarItem icon={Users} label="Noivas" active={activeTab === 'brides'} onClick={() => setActiveTab('brides')} />
+          <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => setActiveTab('brides')} />
           <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />
           <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
@@ -925,7 +1186,7 @@ export default function App() {
             </div>
           </div>
           <button
-            onClick={() => setIsBrideModalOpen(true)}
+            onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
             className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
           >
             <Plus className="w-5 h-5" />
@@ -952,7 +1213,9 @@ export default function App() {
                 key="brides"
                 brides={brides}
                 payments={payments}
-                onAdd={() => setIsBrideModalOpen(true)}
+                onEdit={(bride) => { setBrideToEdit(bride); setIsBrideModalOpen(true); }}
+                onUpdateStatus={handleUpdateBrideStatus}
+                onDelete={handleDeleteBride}
               />
             )}
             {activeTab === 'finance' && (
@@ -961,6 +1224,7 @@ export default function App() {
                 payments={payments}
                 expenses={expenses}
                 brides={brides}
+                stats={stats}
                 onAddPayment={handleAddPayment}
                 onAddExpense={handleAddExpense}
               />
@@ -973,7 +1237,7 @@ export default function App() {
 
         {/* Mobile Floating Action Button */}
         <button
-          onClick={() => setIsBrideModalOpen(true)}
+          onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
           className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
         >
           <Plus className="w-8 h-8" />
@@ -982,8 +1246,9 @@ export default function App() {
 
       <BrideModal
         isOpen={isBrideModalOpen}
-        onClose={() => setIsBrideModalOpen(false)}
-        onAdd={handleAddBride}
+        onClose={() => { setIsBrideModalOpen(false); setBrideToEdit(null); }}
+        onSave={handleSaveBride}
+        brideToEdit={brideToEdit}
       />
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>

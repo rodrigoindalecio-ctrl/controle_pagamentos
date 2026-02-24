@@ -88,9 +88,17 @@ app.get("/api/dashboard/stats", async (req, res) => {
             return (diff >= 0 ? "+" : "") + diff.toFixed(1).replace('.', ',') + "%";
         };
 
-        // Monthly Revenue
+        // Monthly Revenue Breakdown
         const monthlyRevenue = allPayments
             .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+        const monthlyAssessoriaRevenue = allPayments
+            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) !== '58')
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+        const monthlyBVRevenue = allPayments
+            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) === '58')
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const lastMonthRevenue = allPayments
@@ -125,7 +133,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
         // Payment deadline = event_date - PAYMENT_ALERT_DAYS (configurable)
         const PAYMENT_ALERT_DAYS = 10; // days before event that payment is due
 
-        const activeBrides = (brides || []).filter(b => (b.status || '').toLowerCase() === 'ativa');
+        const activeBrides = (brides || []).filter(b => (b.status || '').toLowerCase() === 'ativa' && String(b.id) !== '58');
         const bridesWithBalance = activeBrides.filter(b => pureNum(b.balance) > 0);
 
         // Calculate payment deadline for each bride
@@ -164,6 +172,14 @@ app.get("/api/dashboard/stats", async (req, res) => {
             .filter(b => { const dl = getDeadline(b.event_date); return dl && dl.getFullYear() === 2028; })
             .reduce((sum, b) => sum + pureNum(b.balance), 0);
 
+        // BRIDES/EVENTS CALCULATION: Grouped by event year
+        const activeEventsThisMonth = activeBrides
+            .filter(b => isThisMonth(b.event_date)).length;
+
+        const activeEvents2026 = activeBrides.filter(b => (b.event_date || '').startsWith('2026')).length;
+        const activeEvents2027 = activeBrides.filter(b => (b.event_date || '').startsWith('2027')).length;
+        const activeEvents2028 = activeBrides.filter(b => (b.event_date || '').startsWith('2028')).length;
+
 
 
         // E. CHART DATA
@@ -194,9 +210,18 @@ app.get("/api/dashboard/stats", async (req, res) => {
         }
 
         res.json({
-            activeBrides: activeBrides.length,
-            activeBridesTrend: "0%", // Default as we don't track history of 'status'
+            activeBrides: activeEventsThisMonth,
+            activeBridesBreakdown: {
+                year2026: activeEvents2026,
+                year2027: activeEvents2027,
+                year2028: activeEvents2028
+            },
+            activeBridesTrend: "0%",
             monthlyRevenue,
+            revenueBreakdown: {
+                assessoria: monthlyAssessoriaRevenue,
+                bv: monthlyBVRevenue
+            },
             revenueTrend,
             pendingPayments,
             pendingBreakdown: {
@@ -335,6 +360,33 @@ app.patch("/api/brides/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     const { error } = await supabase.from("brides").update({ status }).eq("id", id);
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
+});
+
+app.put("/api/brides/:id", async (req, res) => {
+    const { id } = req.params;
+    const { name, email, event_date, service_type, contract_value, original_value } = req.body;
+
+    const { error } = await supabase
+        .from("brides")
+        .update({
+            name,
+            email,
+            event_date,
+            service_type,
+            contract_value,
+            original_value
+        })
+        .eq("id", id);
+
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
+});
+
+app.delete("/api/brides/:id", async (req, res) => {
+    const { id } = req.params;
+    const { error } = await supabase.from("brides").delete().eq("id", id);
     if (error) return res.status(500).json(error);
     res.json({ success: true });
 });
