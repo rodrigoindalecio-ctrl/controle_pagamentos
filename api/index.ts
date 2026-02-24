@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -203,6 +202,8 @@ export async function startServer() {
     const rootDir = path.resolve(__dirname, "..");
 
     if (process.env.NODE_ENV !== "production") {
+        // Importação dinâmica para evitar que o Vercel tente carregar o Vite em produção
+        const { createServer: createViteServer } = await import("vite");
         const vite = await createViteServer({
             server: { middlewareMode: true },
             appType: "spa",
