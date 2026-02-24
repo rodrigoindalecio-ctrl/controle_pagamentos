@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users,
   TrendingUp,
+  TrendingDown,
   Clock,
   Wallet,
   Calendar,
@@ -28,6 +29,7 @@ interface Bride {
   service_type: string;
   contract_value: number;
   original_value: number;
+  balance: number;
 }
 
 interface Payment {
@@ -40,6 +42,14 @@ interface Payment {
   status: string;
 }
 
+interface Expense {
+  id: number;
+  description: string;
+  amount: number;
+  date: string;
+  category: string;
+}
+
 interface MonthlyStat {
   month: string;
   revenue: number;
@@ -48,9 +58,17 @@ interface MonthlyStat {
 
 interface DashboardStats {
   activeBrides: number;
+  activeBridesTrend: string;
   monthlyRevenue: number;
+  revenueTrend: string;
   pendingPayments: number;
+  pendingBreakdown?: {
+    year2026: number;
+    year2027: number;
+    year2028: number;
+  };
   monthlyExpenses: number;
+  expensesTrend: string;
   chartData: MonthlyStat[];
 }
 
@@ -83,19 +101,30 @@ const Header = ({ title, subtitle }: { title: string, subtitle: string }) => (
   </header>
 );
 
-const StatCard = ({ label, value, icon: Icon, trend, color }: { label: string, value: string, icon: any, trend?: string, color: string }) => (
-  <div className="bg-white p-4 lg:p-6 rounded-xl border border-[#883545]/10 shadow-sm flex flex-col gap-2">
-    <div className="flex justify-between items-start">
-      <span className="text-slate-500 text-xs lg:text-sm font-medium">{label}</span>
-      <Icon className={`${color} opacity-40 w-4 h-4 lg:w-5 lg:h-5`} />
-    </div>
-    <p className="text-xl lg:text-2xl font-black text-slate-900">{value}</p>
-    {trend && (
-      <div className="flex items-center gap-1 text-emerald-600 text-[10px] lg:text-xs font-bold">
-        <TrendingUp className="w-3 h-3" />
-        <span>{trend}</span>
+const StatCard = ({ label, value, icon: Icon, trend, color, children }: { label: string, value: string, icon: any, trend?: string, color: string, children?: React.ReactNode }) => (
+  <div className="bg-white p-4 lg:p-6 rounded-xl border border-[#883545]/10 shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:border-[#883545]/30 transition-all">
+    <div className="flex justify-between items-start relative z-10">
+      <span className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">{label}</span>
+      <div className={`p-2 rounded-lg bg-slate-50 ${color} group-hover:scale-110 transition-transform`}>
+        <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
       </div>
-    )}
+    </div>
+    <div className="relative z-10">
+      <p className="text-lg lg:text-2xl font-black text-slate-900 leading-none mb-1">{value}</p>
+      {trend && (
+        <div className={`flex items-center gap-1 text-[10px] font-bold ${label === "Despesas"
+          ? (trend.startsWith('-') ? 'text-emerald-600' : trend.startsWith('+') ? 'text-rose-600' : 'text-slate-400')
+          : (trend.startsWith('+') ? 'text-emerald-600' : trend.startsWith('-') ? 'text-rose-600' : 'text-slate-400')
+          }`}>
+          {trend.startsWith('-') ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+          <span>{trend}</span>
+        </div>
+      )}
+    </div>
+    {children && <div className="mt-2 pt-2 border-t border-slate-50 relative z-10">{children}</div>}
+    <div className={`absolute -right-2 -bottom-2 w-16 h-16 ${color} opacity-[0.03] group-hover:scale-125 transition-transform`}>
+      <Icon className="w-full h-full" />
+    </div>
   </div>
 );
 
@@ -110,13 +139,37 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 lg:space-y-8 pb-20 lg:pb-0"
     >
+      {/* UI v2.1 */}
       <Header title="Olá, Rodrigo! 👋" subtitle="Aqui está o resumo da sua assessoria de casamentos hoje." />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
-        <StatCard label="Noivas Ativas" value={stats.activeBrides.toString()} icon={Users} trend="+12% este mês" color="text-[#883545]" />
-        <StatCard label="Receita (Mês)" value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} trend="+5% vs anterior" color="text-emerald-500" />
-        <StatCard label="Pendentes" value={`R$ ${stats.pendingPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} trend="-2% este mês" color="text-amber-500" />
-        <StatCard label="Despesas" value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend="-8% este mês" color="text-rose-500" />
+        <StatCard label="Noivas Ativas" value={stats.activeBrides.toString()} icon={Users} color="text-[#883545]" />
+        <StatCard label="Receita (Mês)" value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} trend={`${stats.revenueTrend} vs anterior`} color="text-emerald-500" />
+        <StatCard
+          label="Pendentes Mês"
+          value={`R$ ${stats.pendingPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          icon={Clock}
+          color="text-amber-500"
+        >
+          {stats.pendingBreakdown && (
+            <div className="space-y-1">
+
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2026:</span>
+                <span className="text-amber-600">R$ {stats.pendingBreakdown.year2026.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2027:</span>
+                <span className="text-amber-600">R$ {stats.pendingBreakdown.year2027.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+                <span className="text-slate-400">2028:</span>
+                <span className="text-amber-600">R$ {stats.pendingBreakdown.year2028.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          )}
+        </StatCard>
+        <StatCard label="Despesas" value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend={`${stats.expensesTrend} vs anterior`} color="text-rose-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -157,10 +210,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
               const alerts = brides
                 .filter(b => b.status === 'Ativa')
                 .map(b => {
-                  const totalPaid = payments
-                    .filter(p => p.bride_id === b.id && (p.status || '').trim().toLowerCase() === 'pago')
-                    .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
-                  const balance = (b.contract_value || 0) - totalPaid;
+                  const balance = Number(b.balance) || 0;
                   const eventDate = new Date(b.event_date);
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
@@ -215,13 +265,13 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
 // --- Brides View ---
 
 const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Payment[], onAdd: () => void, key?: string }) => {
-  const calculateBalance = (brideId: number, contractValue: number) => {
+  const calculateBalance = (bride: Bride) => {
     const totalPaid = payments
-      .filter(p => p.bride_id === brideId && (p.status || '').trim().toLowerCase() === 'pago')
+      .filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago')
       .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
     return {
       totalPaid,
-      balance: Math.max(0, contractValue - totalPaid)
+      balance: bride.balance
     };
   };
 
@@ -249,7 +299,7 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
           </div>
         ) : (
           brides.map((bride) => {
-            const { totalPaid, balance } = calculateBalance(bride.id, bride.contract_value || 0);
+            const { totalPaid, balance } = calculateBalance(bride);
             return (
               <div key={bride.id} className="bg-white p-5 rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative overflow-hidden group">
                 <div className={`absolute top-0 right-0 w-1.5 h-full ${bride.status === 'Ativa' ? 'bg-emerald-500' : bride.status === 'Concluído' ? 'bg-blue-400' : bride.status === 'Inativa' ? 'bg-slate-300' : 'bg-rose-500'}`} />
@@ -326,7 +376,7 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
                 </tr>
               ) : (
                 brides.map((bride) => {
-                  const { totalPaid, balance } = calculateBalance(bride.id, bride.contract_value || 0);
+                  const { totalPaid, balance } = calculateBalance(bride);
                   return (
                     <tr key={bride.id} className="hover:bg-[#883545]/5 transition-colors group">
                       <td className="px-4 lg:px-6 py-4">
@@ -381,27 +431,42 @@ const BridesView = ({ brides, payments, onAdd }: { brides: Bride[], payments: Pa
 
 // --- Finance View ---
 
-const FinanceView = ({ payments, brides, onAdd }: { payments: Payment[], brides: Bride[], onAdd: (p: any) => void, key?: string }) => {
+const FinanceView = ({ payments, expenses, brides, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
+  const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [formData, setFormData] = useState({
     bride_id: '',
     description: '',
-    amount_paid: '',
-    payment_date: new Date().toISOString().split('T')[0],
-    status: 'Pago'
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    status: 'Pago',
+    category: 'Geral'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd({
-      ...formData,
-      amount_paid: Number(formData.amount_paid)
-    });
+    if (type === 'entrada') {
+      onAddPayment({
+        bride_id: formData.bride_id,
+        description: formData.description,
+        amount_paid: Number(formData.amount),
+        payment_date: formData.date,
+        status: formData.status
+      });
+    } else {
+      onAddExpense({
+        description: formData.description,
+        amount: Number(formData.amount),
+        date: formData.date,
+        category: formData.category
+      });
+    }
     setFormData({
       bride_id: '',
       description: '',
-      amount_paid: '',
-      payment_date: new Date().toISOString().split('T')[0],
-      status: 'Pago'
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      status: 'Pago',
+      category: 'Geral'
     });
   };
 
@@ -421,20 +486,53 @@ const FinanceView = ({ payments, brides, onAdd }: { payments: Payment[], brides:
     >
       <Header title="Gestão Financeira" subtitle="Controle total de entradas e despesas da sua assessoria de casamentos." />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-        <StatCard label="Total a Receber" value={`R$ ${(totalRecebido + totalPendente).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} color="text-[#883545]" />
-        <StatCard label="Recebido" value={`R$ ${totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={CircleDollarSign} color="text-emerald-500" />
-        <StatCard label="Pendente" value={`R$ ${totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} color="text-amber-500" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
+        <StatCard label="Total Ganho" value={`R$ ${totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} color="text-emerald-500" />
+        <StatCard label="Despesas" value={`R$ ${expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} color="text-rose-500" />
+        <StatCard label="Saldo Líquido" value={`R$ ${(totalRecebido - expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={CircleDollarSign} color="text-[#883545]" />
+        <StatCard label="A Receber" value={`R$ ${totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} color="text-amber-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <div className="lg:col-span-1">
           <div className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border border-[#883545]/10">
+            <div className="flex gap-2 mb-6 p-1 bg-slate-50 rounded-xl border border-[#883545]/5">
+              <button
+                onClick={() => setType('entrada')}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${type === 'entrada' ? 'bg-[#883545] text-white shadow-md' : 'text-slate-400 hover:text-[#883545]'}`}
+              >
+                Receita (+)
+              </button>
+              <button
+                onClick={() => setType('saida')}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${type === 'saida' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-rose-500'}`}
+              >
+                Despesa (-)
+              </button>
+            </div>
             <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-[#883545]" />
-              Registrar Parcela
+              <Plus className={`w-5 h-5 ${type === 'entrada' ? 'text-[#883545]' : 'text-rose-500'}`} />
+              {type === 'entrada' ? 'Registrar Parcela' : 'Lançar Despesa'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-5">
+              {type === 'entrada' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Noiva / Casal</label>
+                  <select
+                    required
+                    value={formData.bride_id}
+                    onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
+                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium transition-all"
+                  >
+                    <option value="">Selecione um cliente...</option>
+                    {brides
+                      .filter(b => b.status === 'Ativa')
+                      .map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Noiva / Casal</label>
                 <select
@@ -456,7 +554,7 @@ const FinanceView = ({ payments, brides, onAdd }: { payments: Payment[], brides:
                 <input
                   required
                   type="text"
-                  placeholder="Ex: Parcela 02/10"
+                  placeholder={type === 'entrada' ? "Ex: Parcela 02/10" : "Ex: Uber para evento"}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
@@ -464,42 +562,59 @@ const FinanceView = ({ payments, brides, onAdd }: { payments: Payment[], brides:
               </div>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Data de Pagamento</label>
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Data {type === 'entrada' ? 'do Pagamento' : 'da Despesa'}</label>
                   <input
                     required
                     type="date"
-                    value={formData.payment_date}
-                    onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Valor Pago (R$)</label>
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Valor (R$)</label>
                   <input
                     required
                     type="number"
                     step="0.01"
-                    value={formData.amount_paid}
-                    onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })}
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     placeholder="0,00"
-                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-bold text-[#883545]"
+                    className={`w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-bold ${type === 'entrada' ? 'text-emerald-600' : 'text-rose-600'}`}
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
-                >
-                  <option value="Pendente">Pendente</option>
-                  <option value="Pago">Pago</option>
-                  <option value="Vencido">Vencido</option>
-                </select>
-              </div>
-              <button type="submit" className="mt-4 w-full h-11 lg:h-12 bg-[#883545] text-white font-black rounded-xl shadow-lg shadow-[#883545]/20 hover:scale-[1.02] active:scale-95 transition-all text-xs uppercase tracking-widest">
-                LANÇAR PAGAMENTO
+              {type === 'entrada' ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
+                  >
+                    <option value="Pendente">Pendente</option>
+                    <option value="Pago">Pago</option>
+                    <option value="Vencido">Vencido</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
+                  >
+                    <option value="Uber">Uber / Transporte</option>
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Marketing">Marketing / Tráfego</option>
+                    <option value="Equipe">Equipe / Freelance</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+              )}
+              <button type="submit" className={`mt-4 w-full h-11 lg:h-12 text-white font-black rounded-xl shadow-lg transition-all text-xs uppercase tracking-widest ${type === 'entrada' ? 'bg-[#883545] shadow-[#883545]/20' : 'bg-rose-500 shadow-rose-500/20'}`}>
+                {type === 'entrada' ? 'LANÇAR RECEITA' : 'REGISTRAR DESPESA'}
               </button>
             </form>
           </div>
@@ -515,84 +630,73 @@ const FinanceView = ({ payments, brides, onAdd }: { payments: Payment[], brides:
               </div>
             </div>
             <div className="lg:hidden p-4 space-y-4">
-              {payments.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 italic font-medium">
-                  <CircleDollarSign className="w-10 h-10 opacity-10 mx-auto mb-2 text-[#883545]" />
-                  Nenhum lançamento encontrado.
-                </div>
-              ) : (
-                payments.map((payment) => (
-                  <div key={payment.id} className="p-4 rounded-xl bg-slate-50 border border-[#883545]/5 space-y-3 relative overflow-hidden">
-                    <div className={`absolute top-0 left-0 w-1 h-full ${(payment.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-500' : (payment.status || '').trim().toLowerCase() === 'pendente' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+              {[...payments, ...expenses.map(e => ({ ...e, bride_name: `[DESPESA] ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))]
+                .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
+                .slice(0, 20)
+                .map((item: any) => (
+                  <div key={item.id + (item.isExpense ? '-exp' : '-pay')} className="p-4 rounded-xl bg-slate-50 border border-[#883545]/5 space-y-3 relative overflow-hidden">
+                    <div className={`absolute top-0 left-0 w-1 h-full ${item.isExpense ? 'bg-rose-500' : (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-sm font-black text-slate-900 leading-tight">{payment.bride_name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{payment.description}</p>
+                        <p className="text-sm font-black text-slate-900 leading-tight">{item.bride_name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{item.description}</p>
                       </div>
-                      <p className="text-sm font-black text-[#883545]">R$ {Number(payment.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className={`text-sm font-black ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-white">
                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
                         <Calendar className="w-3 h-3 text-[#883545]/40" />
-                        {payment.payment_date && new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                        {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${(payment.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
-                        (payment.status || '').trim().toLowerCase() === 'pendente' ? 'bg-amber-100 text-amber-700' :
-                          'bg-rose-100 text-rose-700'
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${item.isExpense ? 'bg-rose-100 text-rose-700' :
+                        (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-amber-100 text-amber-700'
                         }`}>
-                        {payment.status || 'Pendente'}
+                        {item.isExpense ? 'Despesa' : (item.status || 'Pendente')}
                       </span>
                     </div>
                   </div>
-                ))
-              )}
+                ))}
             </div>
 
             <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold">
-                    <th className="px-6 py-4">Nome</th>
-                    <th className="px-6 py-4">Data Pagamento</th>
-                    <th className="px-6 py-4">Descrição</th>
-                    <th className="px-6 py-4 text-right">Valor Pago</th>
-                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Descrição / Origem</th>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4 text-right">Valor</th>
+                    <th className="px-6 py-4">Tipo / Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#883545]/5">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-16 text-center text-slate-400 italic font-medium">
-                        <div className="flex flex-col items-center">
-                          <CircleDollarSign className="w-10 h-10 opacity-10 mb-2 text-[#883545]" />
-                          Nenhum lançamento encontrado.
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((payment) => (
-                      <tr key={payment.id} className="hover:bg-[#883545]/5 transition-colors group">
+                  {[...payments, ...expenses.map(e => ({ ...e, bride_name: `Despesa: ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))]
+                    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
+                    .slice(0, 30)
+                    .map((item: any) => (
+                      <tr key={item.id + (item.isExpense ? '-exp' : '-pay')} className="hover:bg-[#883545]/5 transition-colors group">
                         <td className="px-6 py-4">
-                          <p className="text-sm font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors">{payment.bride_name}</p>
+                          <p className="text-sm font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors">{item.bride_name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">{item.description}</p>
                         </td>
                         <td className="px-6 py-4 text-xs font-medium text-slate-600">
-                          {payment.payment_date && new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                          {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
                         </td>
-                        <td className="px-6 py-4 text-[10px] lg:text-xs font-bold text-slate-400 uppercase tracking-tight">{payment.description}</td>
-                        <td className="px-6 py-4 text-sm font-black text-right text-[#883545]">
-                          R$ {Number(payment.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
+                          {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] lg:text-xs font-bold ${(payment.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
-                            (payment.status || '').trim().toLowerCase() === 'pendente' ? 'bg-amber-100 text-amber-700' :
-                              'bg-rose-100 text-rose-700'
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.isExpense ? 'bg-rose-100 text-rose-700' :
+                            (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-amber-100 text-amber-700'
                             }`}>
-                            {payment.status || 'Pendente'}
+                            {item.isExpense ? 'SAÍDA' : 'ENTRADA'}
                           </span>
                         </td>
                       </tr>
-                    ))
-                  )}
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -724,25 +828,22 @@ export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [brides, setBrides] = useState<Bride[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [statsRes, bridesRes, paymentsRes] = await Promise.all([
+      const [statsRes, bridesRes, paymentsRes, expensesRes] = await Promise.all([
         fetch('/api/dashboard/stats'),
         fetch('/api/brides'),
-        fetch('/api/payments')
+        fetch('/api/payments'),
+        fetch('/api/expenses')
       ]);
 
-      if (statsRes.ok) {
-        setStats(await statsRes.json());
-      }
-      if (bridesRes.ok) {
-        setBrides(await bridesRes.json());
-      }
-      if (paymentsRes.ok) {
-        setPayments(await paymentsRes.json());
-      }
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (bridesRes.ok) setBrides(await bridesRes.json());
+      if (paymentsRes.ok) setPayments(await paymentsRes.json());
+      if (expensesRes.ok) setExpenses(await expensesRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -772,10 +873,20 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(paymentData)
       });
-      if (res.ok) {
-        fetchData();
-        setActiveTab('dashboard');
-      }
+      if (res.ok) fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddExpense = async (expenseData: any) => {
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expenseData)
+      });
+      if (res.ok) fetchData();
     } catch (e) {
       console.error(e);
     }
@@ -848,8 +959,10 @@ export default function App() {
               <FinanceView
                 key="finance"
                 payments={payments}
+                expenses={expenses}
                 brides={brides}
-                onAdd={handleAddPayment}
+                onAddPayment={handleAddPayment}
+                onAddExpense={handleAddExpense}
               />
             )}
             {activeTab === 'settings' && (

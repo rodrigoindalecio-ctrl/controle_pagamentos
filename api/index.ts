@@ -20,83 +20,192 @@ app.use(express.json());
 // API Routes
 app.get("/api/dashboard/stats", async (req, res) => {
     try {
-        // Auto-complete past events
-        const todayStr = new Date().toISOString().split('T')[0];
-        await supabase
+        // 1. Fetch brides and sum the 'balance' column
+        const { data: brides, error: brideError } = await supabase
             .from("brides")
-            .update({ status: 'Concluído' })
-            .lt("event_date", todayStr)
-            .eq("status", "Ativa");
+            .select("id, status, balance, contract_value, event_date");
 
-        const { count: activeBrides } = await supabase
-            .from("brides")
-            .select("*", { count: "exact", head: true })
-            .eq("status", "Ativa");
+        if (brideError) throw brideError;
 
+        // 2. Fetch payments and expenses
+        // We fetch in two parts to avoid Supabase's 1000 row default limit:
+        // a) Payments from the last 6 months (for revenue and chart)
+        // b) All unpaid payments (for pending breakdown)
         const now = new Date();
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0];
 
-        // Monthly Revenue: only this month + paid
-        const { data: revenueData, error: revError } = await supabase
-            .from("payments")
-            .select("amount_paid, status")
-            .gte("payment_date", firstDayOfMonth)
-            .lte("payment_date", lastDayOfMonth);
+        const [pastPaymentsRes, unpaidPaymentsRes, expensesRes] = await Promise.all([
+            supabase.from("payments").select("*").gte("payment_date", sixMonthsAgo),
+            supabase.from("payments").select("*").neq("status", "pago"),
+            supabase.from("expenses").select("*").gte("date", sixMonthsAgo)
+        ]);
 
-        if (revError) throw revError;
+        // Combine unique payments
+        const paymentMap = new Map();
+        (pastPaymentsRes.data || []).forEach(p => paymentMap.set(p.id, p));
+        (unpaidPaymentsRes.data || []).forEach(p => paymentMap.set(p.id, p));
+        const allPayments = Array.from(paymentMap.values());
 
-        const monthlyRevenue = revenueData?.filter(p =>
-            p.status?.trim().toLowerCase() === 'pago'
-        ).reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0) || 0;
+        const allExpenses = expensesRes.data || [];
 
-        // Pending Payments: NOT paid
-        const { data: pendingData, error: pendError } = await supabase
-            .from("payments")
-            .select("amount_paid, status")
-            .not("status", "ilike", "pago");
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
-        if (pendError) throw pendError;
+        // Unified Number Parser (handles R$, dots, commas, spaces, strings, numbers)
+        const pureNum = (val: any) => {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            let s = val.toString().replace(/[R$\s]/g, '');
+            if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+            else if (s.includes(',')) s = s.replace(',', '.');
+            return parseFloat(s) || 0;
+        };
 
-        const pendingPayments = pendingData?.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0) || 0;
+        const isPaid = (status: string) => (status || '').trim().toLowerCase() === 'pago';
 
-        const { data: expensesData, error: expError } = await supabase
-            .from("expenses")
-            .select("amount")
-            .gte("date", firstDayOfMonth)
-            .lte("date", lastDayOfMonth);
+        const isThisMonth = (dateStr: string) => {
+            if (!dateStr) return false;
+            const parts = dateStr.split('T')[0].split('-');
+            if (parts.length < 2) return false;
+            const match = parseInt(parts[0]) === currentYear && (parseInt(parts[1]) - 1) === currentMonth;
+            return match;
+        };
 
-        if (expError) throw expError;
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonth = lastMonthDate.getMonth();
+        const lastYear = lastMonthDate.getFullYear();
 
-        const monthlyExpenses = expensesData?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0;
+        const isLastMonth = (dateStr: string) => {
+            if (!dateStr) return false;
+            const parts = dateStr.split('T')[0].split('-');
+            if (parts.length < 2) return false;
+            return parseInt(parts[0]) === lastYear && (parseInt(parts[1]) - 1) === lastMonth;
+        };
 
-        // CHART DATA: Last 6 months
+        const calcTrend = (curr: number, prev: number) => {
+            if (prev === 0) return curr > 0 ? "+100,0%" : "0,0%";
+            const diff = ((curr - prev) / prev) * 100;
+            return (diff >= 0 ? "+" : "") + diff.toFixed(1).replace('.', ',') + "%";
+        };
+
+        // Monthly Revenue
+        const monthlyRevenue = allPayments
+            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+        const lastMonthRevenue = allPayments
+            .filter(p => isLastMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+        const revenueTrend = calcTrend(monthlyRevenue, lastMonthRevenue);
+
+        // Monthly Expenses
+        const monthlyExpensesTable = allExpenses
+            .filter(e => isThisMonth(e.date))
+            .reduce((sum, e) => sum + pureNum(e.amount), 0);
+
+        const monthlyExpensesLegacy = allPayments
+            .filter(p => isThisMonth(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+            .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
+
+        const currentExpenses = monthlyExpensesTable + monthlyExpensesLegacy;
+
+        const lastMonthExpensesTable = allExpenses
+            .filter(e => isLastMonth(e.date))
+            .reduce((sum, e) => sum + pureNum(e.amount), 0);
+
+        const lastMonthExpensesLegacy = allPayments
+            .filter(p => isLastMonth(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+            .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
+
+        const lastMonthExpenses = lastMonthExpensesTable + lastMonthExpensesLegacy;
+        const expensesTrend = calcTrend(currentExpenses, lastMonthExpenses);
+
+        // PENDING CALCULATION: Based on balance of active brides, using payment deadline
+        // Payment deadline = event_date - PAYMENT_ALERT_DAYS (configurable)
+        const PAYMENT_ALERT_DAYS = 10; // days before event that payment is due
+
+        const activeBrides = (brides || []).filter(b => (b.status || '').toLowerCase() === 'ativa');
+        const bridesWithBalance = activeBrides.filter(b => pureNum(b.balance) > 0);
+
+        // Calculate payment deadline for each bride
+        const getDeadline = (eventDate: string) => {
+            if (!eventDate) return null;
+            const d = new Date(eventDate.split('T')[0] + 'T12:00:00');
+            if (isNaN(d.getTime())) return null;
+            d.setDate(d.getDate() - PAYMENT_ALERT_DAYS);
+            return d;
+        };
+
+        const isMonthYear = (date: Date, month: number, year: number) =>
+            date.getMonth() === month && date.getFullYear() === year;
+
+        // Main card value: balance of brides whose payment deadline falls in the current month
+        // (or has already passed — i.e. deadline <= end of current month)
+        const pendingThisMonth = bridesWithBalance
+            .filter(b => {
+                const dl = getDeadline(b.event_date);
+                if (!dl) return false;
+                // Deadline is in the current month OR already overdue (before current month)
+                const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+                return dl <= endOfMonth;
+            })
+            .reduce((sum, b) => sum + pureNum(b.balance), 0);
+        const pendingPayments = pendingThisMonth;
+
+        // Breakdown by year of payment deadline
+        const pending2026 = bridesWithBalance
+            .filter(b => { const dl = getDeadline(b.event_date); return dl && dl.getFullYear() === 2026; })
+            .reduce((sum, b) => sum + pureNum(b.balance), 0);
+        const pending2027 = bridesWithBalance
+            .filter(b => { const dl = getDeadline(b.event_date); return dl && dl.getFullYear() === 2027; })
+            .reduce((sum, b) => sum + pureNum(b.balance), 0);
+        const pending2028 = bridesWithBalance
+            .filter(b => { const dl = getDeadline(b.event_date); return dl && dl.getFullYear() === 2028; })
+            .reduce((sum, b) => sum + pureNum(b.balance), 0);
+
+
+
+        // E. CHART DATA
         const chartData = [];
         const monthNames = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const mStart = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+            const m = d.getMonth(); const y = d.getFullYear();
 
-            const { data: mPay } = await supabase.from("payments").select("amount_paid, status").gte("payment_date", mStart).lte("payment_date", mEnd);
-            const { data: mExp } = await supabase.from("expenses").select("amount").gte("date", mStart).lte("date", mEnd);
+            const rev = allPayments.filter(p => {
+                const pts = (p.payment_date || '').split('T')[0].split('-');
+                return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m && isPaid(p.status) && pureNum(p.amount_paid) > 0;
+            }).reduce((s, p) => s + pureNum(p.amount_paid), 0);
 
-            const rev = mPay?.filter(p => p.status?.toLowerCase() === 'pago').reduce((s, p) => s + (Number(p.amount_paid) || 0), 0) || 0;
-            const exp = mExp?.reduce((s, e) => s + (Number(e.amount) || 0), 0) || 0;
+            const expT = allExpenses.filter(e => {
+                const pts = (e.date || '').split('T')[0].split('-');
+                return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m;
+            }).reduce((s, e) => s + pureNum(e.amount), 0);
 
-            chartData.push({
-                month: monthNames[d.getMonth()],
-                revenue: rev,
-                expenses: exp
-            });
+            const expL = allPayments.filter(p => {
+                const pts = (p.payment_date || '').split('T')[0].split('-');
+                const isM = pts.length >= 2 && (parseInt(pts[1]) - 1) === m && parseInt(pts[0]) === y;
+                return isM && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0);
+            }).reduce((s, p) => s + Math.abs(pureNum(p.amount_paid)), 0);
+
+            chartData.push({ month: monthNames[m], revenue: rev, expenses: expT + expL });
         }
 
         res.json({
-            activeBrides: activeBrides || 0,
+            activeBrides: activeBrides.length,
+            activeBridesTrend: "0%", // Default as we don't track history of 'status'
             monthlyRevenue,
+            revenueTrend,
             pendingPayments,
-            monthlyExpenses,
+            pendingBreakdown: {
+                year2026: pending2026,
+                year2027: pending2027,
+                year2028: pending2028
+            },
+            monthlyExpenses: currentExpenses,
+            expensesTrend,
             chartData
         });
     } catch (error) {
@@ -109,17 +218,25 @@ app.get("/api/brides", async (req, res) => {
     const { data, error } = await supabase
         .from("brides")
         .select("*")
-        .order("id", { ascending: false });
+        .order("name", { ascending: true });
 
-    if (error) {
-        console.error("Get brides error:", error);
-        return res.status(500).json(error);
-    }
+    if (error) return res.status(500).json(error);
     res.json(data);
 });
 
 app.post("/api/brides", async (req, res) => {
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
+    // Initial balance is the contract value
+    const pureNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        let s = val.toString().replace(/[R$\s]/g, '');
+        if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+        else if (s.includes(',')) s = s.replace(',', '.');
+        return parseFloat(s) || 0;
+    };
+    const initialBalance = pureNum(contract_value) || pureNum(original_value) || 0;
+
     const { data, error } = await supabase
         .from("brides")
         .insert([{
@@ -127,18 +244,15 @@ app.post("/api/brides", async (req, res) => {
             email,
             event_date: event_date || null,
             service_type,
-            contract_value: Number(contract_value) || 0,
-            original_value: Number(original_value) || 0,
+            contract_value,
+            original_value,
+            balance: initialBalance,
             status: 'Ativa'
         }])
-        .select()
-        .single();
+        .select();
 
-    if (error) {
-        console.error("Post bride error:", error);
-        return res.status(500).json(error);
-    }
-    res.json(data);
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
 });
 
 app.get("/api/payments", async (req, res) => {
@@ -176,12 +290,13 @@ app.post("/api/payments", async (req, res) => {
     const { bride_id, description, amount_paid, payment_date, status } = req.body;
     const finalDate = payment_date && payment_date !== "" ? payment_date : new Date().toISOString().split('T')[0];
 
+    // 1. Insert the payment
     const { data, error } = await supabase
         .from("payments")
         .insert([{
             bride_id,
             description,
-            amount_paid: Number(amount_paid) || 0,
+            amount_paid,
             payment_date: finalDate,
             status: status || 'Pago'
         }])
@@ -192,6 +307,27 @@ app.post("/api/payments", async (req, res) => {
         console.error("Post payment error:", error);
         return res.status(500).json(error);
     }
+
+    // 2. If the payment is 'Pago', subtract from the bride's balance
+    if ((status || 'Pago').trim().toLowerCase() === 'pago') {
+        const pureNum = (val: any) => {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            let s = val.toString().replace(/[R$\s]/g, '');
+            if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+            else if (s.includes(',')) s = s.replace(',', '.');
+            return parseFloat(s) || 0;
+        };
+
+        const paidAmount = pureNum(amount_paid);
+        const { data: bride } = await supabase.from("brides").select("balance").eq("id", bride_id).single();
+
+        if (bride) {
+            const newBalance = Math.max(0, (bride.balance || 0) - paidAmount);
+            await supabase.from("brides").update({ balance: newBalance }).eq("id", bride_id);
+        }
+    }
+
     res.json(data);
 });
 
@@ -201,6 +337,41 @@ app.patch("/api/brides/:id/status", async (req, res) => {
     const { error } = await supabase.from("brides").update({ status }).eq("id", id);
     if (error) return res.status(500).json(error);
     res.json({ success: true });
+});
+
+app.get("/api/expenses", async (req, res) => {
+    const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .order("date", { ascending: false });
+
+    if (error) {
+        console.error("Get expenses error:", error);
+        return res.status(500).json(error);
+    }
+    res.json(data);
+});
+
+app.post("/api/expenses", async (req, res) => {
+    const { description, amount, date, category } = req.body;
+    const finalDate = date && date !== "" ? date : new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+        .from("expenses")
+        .insert([{
+            description,
+            amount: Number(amount) || 0,
+            date: finalDate,
+            category: category || 'Geral'
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Post expense error:", error);
+        return res.status(500).json(error);
+    }
+    res.json(data);
 });
 
 export default app;
