@@ -71,6 +71,11 @@ app.get("/api/dashboard/stats", async (req, res) => {
             return match;
         };
 
+        const isThisYear = (dateStr: string) => {
+            if (!dateStr) return false;
+            return dateStr.startsWith(currentYear.toString());
+        };
+
         const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lastMonth = lastMonthDate.getMonth();
         const lastYear = lastMonthDate.getFullYear();
@@ -105,6 +110,10 @@ app.get("/api/dashboard/stats", async (req, res) => {
             .filter(p => isLastMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
+        const yearlyRevenue = allPayments
+            .filter(p => isThisYear(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
         const revenueTrend = calcTrend(monthlyRevenue, lastMonthRevenue);
 
         // Monthly Expenses
@@ -117,6 +126,14 @@ app.get("/api/dashboard/stats", async (req, res) => {
             .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
 
         const currentExpenses = monthlyExpensesTable + monthlyExpensesLegacy;
+
+        const yearlyExpensesTable = allExpenses
+            .filter(e => isThisYear(e.date))
+            .reduce((sum, e) => sum + pureNum(e.amount), 0);
+        const yearlyExpensesLegacy = allPayments
+            .filter(p => isThisYear(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+            .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
+        const yearlyExpenses = yearlyExpensesTable + yearlyExpensesLegacy;
 
         const lastMonthExpensesTable = allExpenses
             .filter(e => isLastMonth(e.date))
@@ -159,6 +176,14 @@ app.get("/api/dashboard/stats", async (req, res) => {
                 return dl <= endOfMonth;
             })
             .reduce((sum, b) => sum + pureNum(b.balance), 0);
+
+        const yearlyPending = bridesWithBalance
+            .filter(b => {
+                const dl = getDeadline(b.event_date);
+                return dl && dl.getFullYear() === currentYear;
+            })
+            .reduce((sum, b) => sum + pureNum(b.balance), 0);
+
         const pendingPayments = pendingThisMonth;
 
         // Breakdown by year of payment deadline
@@ -179,6 +204,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
         const activeEvents2026 = activeBrides.filter(b => (b.event_date || '').startsWith('2026')).length;
         const activeEvents2027 = activeBrides.filter(b => (b.event_date || '').startsWith('2027')).length;
         const activeEvents2028 = activeBrides.filter(b => (b.event_date || '').startsWith('2028')).length;
+        const activeBridesTrend = "0%";
 
 
 
@@ -211,27 +237,19 @@ app.get("/api/dashboard/stats", async (req, res) => {
 
         res.json({
             activeBrides: activeEventsThisMonth,
-            activeBridesBreakdown: {
-                year2026: activeEvents2026,
-                year2027: activeEvents2027,
-                year2028: activeEvents2028
-            },
-            activeBridesTrend: "0%",
+            activeBridesBreakdown: { year2026: activeEvents2026, year2027: activeEvents2027, year2028: activeEvents2028 },
+            activeBridesTrend,
             monthlyRevenue,
-            revenueBreakdown: {
-                assessoria: monthlyAssessoriaRevenue,
-                bv: monthlyBVRevenue
-            },
+            yearlyRevenue,
             revenueTrend,
+            revenueBreakdown: { assessoria: monthlyAssessoriaRevenue, bv: monthlyBVRevenue },
             pendingPayments,
-            pendingBreakdown: {
-                year2026: pending2026,
-                year2027: pending2027,
-                year2028: pending2028
-            },
+            yearlyPending,
+            pendingBreakdown: { year2026: pending2026, year2027: pending2027, year2028: pending2028 },
             monthlyExpenses: currentExpenses,
+            yearlyExpenses,
             expensesTrend,
-            chartData
+            chartData: chartData
         });
     } catch (error) {
         console.error("Dashboard stats error:", error);

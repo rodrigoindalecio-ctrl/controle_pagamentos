@@ -72,18 +72,21 @@ interface DashboardStats {
   };
   activeBridesTrend: string;
   monthlyRevenue: number;
+  yearlyRevenue: number;
   revenueBreakdown?: {
     assessoria: number;
     bv: number;
   };
   revenueTrend: string;
   pendingPayments: number;
+  yearlyPending: number;
   pendingBreakdown?: {
     year2026: number;
     year2027: number;
     year2028: number;
   };
   monthlyExpenses: number;
+  yearlyExpenses: number;
   expensesTrend: string;
   chartData: MonthlyStat[];
 }
@@ -212,7 +215,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
             </div>
           )}
         </StatCard>
-        <StatCard label="Despesas" value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend={`${stats.expensesTrend} vs anterior`} color="text-rose-500" />
+        <StatCard label="Despesas (Mês)" value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend={`${stats.expensesTrend} vs anterior`} color="text-rose-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -783,12 +786,29 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
     setRevenueSegment('assessoria');
   };
 
-  const totalRecebido = payments
-    .filter(p => (p.status || '').trim().toLowerCase() === 'pago')
+  const currentYear = new Date().getFullYear();
+
+  const totalRecebidoAno = payments
+    .filter(p => {
+      const isPaid = (p.status || '').trim().toLowerCase() === 'pago';
+      const year = p.payment_date ? new Date(p.payment_date).getFullYear() : null;
+      return isPaid && year === currentYear;
+    })
     .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
 
-  const totalPendente = brides
-    .filter(b => (b.status === 'Ativa' || b.status === 'Cancelado') && b.id !== 58)
+  const totalDespesasAno = expenses
+    .filter(e => {
+      const year = e.date ? new Date(e.date).getFullYear() : null;
+      return year === currentYear;
+    })
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+  const totalPendenteAno = brides
+    .filter(b => {
+      const isActiveOrCancelled = (b.status === 'Ativa' || b.status === 'Cancelado') && b.id !== 58;
+      const year = b.event_date ? new Date(b.event_date).getFullYear() : null;
+      return isActiveOrCancelled && year === currentYear;
+    })
     .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   return (
@@ -800,10 +820,10 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
       <Header title="Gestão Financeira" subtitle="Controle total de entradas e despesas da sua assessoria de casamentos." />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
-        <StatCard label="Total Ganho" value={`R$ ${totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} color="text-emerald-500" />
-        <StatCard label="Despesas" value={`R$ ${expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} color="text-rose-500" />
-        <StatCard label="Saldo Líquido" value={`R$ ${(totalRecebido - expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={CircleDollarSign} color="text-[#883545]" />
-        <StatCard label="A Receber" value={`R$ ${totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} color="text-amber-500" />
+        <StatCard label="Total Ganho (Ano)" value={`R$ ${totalRecebidoAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} color="text-emerald-500" />
+        <StatCard label="Despesas (Ano)" value={`R$ ${totalDespesasAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} color="text-rose-500" />
+        <StatCard label="Saldo Líquido (Ano)" value={`R$ ${(totalRecebidoAno - totalDespesasAno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={CircleDollarSign} color="text-[#883545]" />
+        <StatCard label="A Receber (Ano)" value={`R$ ${totalPendenteAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} color="text-amber-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
