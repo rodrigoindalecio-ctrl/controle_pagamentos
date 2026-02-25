@@ -20,25 +20,28 @@ app.use(express.json());
 // API Routes
 app.get("/api/dashboard/stats", async (req, res) => {
     try {
-        // 1. Fetch brides and sum the 'balance' column
-        const { data: brides, error: brideError } = await supabase
-            .from("brides")
-            .select("id, status, balance, contract_value, event_date");
-
-        if (brideError) throw brideError;
-
-        // 2. Fetch payments and expenses
-        // We fetch in two parts to avoid Supabase's 1000 row default limit:
-        // a) Payments from the last 6 months (for revenue and chart)
-        // b) All unpaid payments (for pending breakdown)
         const now = new Date();
-        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0];
+        const queryYear = req.query.year ? parseInt(req.query.year as string) : now.getFullYear();
+        const queryMonth = req.query.month ? (req.query.month === 'all' ? 'all' : parseInt(req.query.month as string)) : (now.getMonth() + 1);
 
-        const [pastPaymentsRes, unpaidPaymentsRes, expensesRes] = await Promise.all([
-            supabase.from("payments").select("*").gte("payment_date", sixMonthsAgo),
+        const targetYear = queryYear;
+        const targetMonth = queryMonth === 'all' ? null : queryMonth - 1; // 0-indexed if not 'all'
+
+        // Log for debugging
+        console.log(`[DASHBOARD FETCH] Year: ${targetYear}, Month: ${queryMonth}`);
+
+        // Fetch data from the beginning of the previous year to ensure we have enough context for trends
+        const fetchFromDate = `${targetYear - 1}-01-01`;
+
+        const [pastPaymentsRes, unpaidPaymentsRes, expensesRes, bridesRes] = await Promise.all([
+            supabase.from("payments").select("*").gte("payment_date", fetchFromDate),
             supabase.from("payments").select("*").neq("status", "pago"),
-            supabase.from("expenses").select("*").gte("date", sixMonthsAgo)
+            supabase.from("expenses").select("*").gte("date", fetchFromDate),
+            supabase.from("brides").select("id, status, balance, contract_value, event_date, original_value")
         ]);
+
+        if (bridesRes.error) throw bridesRes.error;
+        const brides = bridesRes.data || [];
 
         // Combine unique payments
         const paymentMap = new Map();
@@ -47,9 +50,6 @@ app.get("/api/dashboard/stats", async (req, res) => {
         const allPayments = Array.from(paymentMap.values());
 
         const allExpenses = expensesRes.data || [];
-
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         // Unified Number Parser (handles R$, dots, commas, spaces, strings, numbers)
         const pureNum = (val: any) => {
@@ -63,29 +63,55 @@ app.get("/api/dashboard/stats", async (req, res) => {
 
         const isPaid = (status: string) => (status || '').trim().toLowerCase() === 'pago';
 
-        const isThisMonth = (dateStr: string) => {
+        const isSelectedPeriod = (dateStr: string) => {
             if (!dateStr) return false;
             const parts = dateStr.split('T')[0].split('-');
             if (parts.length < 2) return false;
-            const match = parseInt(parts[0]) === currentYear && (parseInt(parts[1]) - 1) === currentMonth;
-            return match;
+            const yearMatch = parseInt(parts[0]) === targetYear;
+            if (queryMonth === 'all') return yearMatch;
+            const monthMatch = (parseInt(parts[1]) - 1) === targetMonth;
+            return yearMatch && monthMatch;
         };
 
         const isThisYear = (dateStr: string) => {
             if (!dateStr) return false;
-            return dateStr.startsWith(currentYear.toString());
+            return dateStr.startsWith(targetYear.toString());
         };
 
-        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastMonth = lastMonthDate.getMonth();
-        const lastYear = lastMonthDate.getFullYear();
+        // For trend calculation, we need "Previous Period"
+        // If month is selected: Previous Month
+        // If year is selected: Previous Year
+        let prevPeriodRevenue = 0;
+        let prevPeriodExpenses = 0;
 
-        const isLastMonth = (dateStr: string) => {
-            if (!dateStr) return false;
-            const parts = dateStr.split('T')[0].split('-');
-            if (parts.length < 2) return false;
-            return parseInt(parts[0]) === lastYear && (parseInt(parts[1]) - 1) === lastMonth;
-        };
+        if (queryMonth === 'all') {
+            const prevYear = targetYear - 1;
+            prevPeriodRevenue = allPayments
+                .filter(p => p.payment_date?.startsWith(prevYear.toString()) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+                .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+            // Expenses for prev year
+            const expT = allExpenses.filter(e => e.date?.startsWith(prevYear.toString())).reduce((sum, e) => sum + pureNum(e.amount), 0);
+            const expL = allPayments.filter(p => p.payment_date?.startsWith(prevYear.toString()) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+                .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
+            prevPeriodExpenses = expT + expL;
+        } else {
+            const prevDate = new Date(targetYear, targetMonth! - 1, 1);
+            const pY = prevDate.getFullYear();
+            const pM = prevDate.getMonth();
+            const isPrevMonth = (d: string) => {
+                const pts = (d || '').split('T')[0].split('-');
+                return pts.length >= 2 && parseInt(pts[0]) === pY && (parseInt(pts[1]) - 1) === pM;
+            };
+            prevPeriodRevenue = allPayments
+                .filter(p => isPrevMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+                .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+            const expT = allExpenses.filter(e => isPrevMonth(e.date)).reduce((sum, e) => sum + pureNum(e.amount), 0);
+            const expL = allPayments.filter(p => isPrevMonth(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+                .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
+            prevPeriodExpenses = expT + expL;
+        }
 
         const calcTrend = (curr: number, prev: number) => {
             if (prev === 0) return curr > 0 ? "+100,0%" : "0,0%";
@@ -93,39 +119,35 @@ app.get("/api/dashboard/stats", async (req, res) => {
             return (diff >= 0 ? "+" : "") + diff.toFixed(1).replace('.', ',') + "%";
         };
 
-        // Monthly Revenue Breakdown
+        // Monthly Revenue Breakdown (Now "Selected Period")
         const monthlyRevenue = allPayments
-            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const monthlyAssessoriaRevenue = allPayments
-            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) !== '58')
+            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) !== '58')
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const monthlyBVRevenue = allPayments
-            .filter(p => isThisMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) === '58')
-            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
-
-        const lastMonthRevenue = allPayments
-            .filter(p => isLastMonth(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) === '58')
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const yearlyRevenue = allPayments
             .filter(p => isThisYear(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
-        const revenueTrend = calcTrend(monthlyRevenue, lastMonthRevenue);
+        const revenueTrend = calcTrend(monthlyRevenue, prevPeriodRevenue);
 
-        // Monthly Expenses
-        const monthlyExpensesTable = allExpenses
-            .filter(e => isThisMonth(e.date))
+        // Monthly Expenses (Now "Selected Period")
+        const currentExpensesTable = allExpenses
+            .filter(e => isSelectedPeriod(e.date))
             .reduce((sum, e) => sum + pureNum(e.amount), 0);
 
-        const monthlyExpensesLegacy = allPayments
-            .filter(p => isThisMonth(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
+        const currentExpensesLegacy = allPayments
+            .filter(p => isSelectedPeriod(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
             .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
 
-        const currentExpenses = monthlyExpensesTable + monthlyExpensesLegacy;
+        const currentExpenses = currentExpensesTable + currentExpensesLegacy;
 
         const yearlyExpensesTable = allExpenses
             .filter(e => isThisYear(e.date))
@@ -135,16 +157,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
             .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
         const yearlyExpenses = yearlyExpensesTable + yearlyExpensesLegacy;
 
-        const lastMonthExpensesTable = allExpenses
-            .filter(e => isLastMonth(e.date))
-            .reduce((sum, e) => sum + pureNum(e.amount), 0);
-
-        const lastMonthExpensesLegacy = allPayments
-            .filter(p => isLastMonth(p.payment_date) && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0))
-            .reduce((sum, p) => sum + Math.abs(pureNum(p.amount_paid)), 0);
-
-        const lastMonthExpenses = lastMonthExpensesTable + lastMonthExpensesLegacy;
-        const expensesTrend = calcTrend(currentExpenses, lastMonthExpenses);
+        const expensesTrend = calcTrend(currentExpenses, prevPeriodExpenses);
 
         // PENDING CALCULATION: Based on balance of active brides, using payment deadline
         // Payment deadline = event_date - PAYMENT_ALERT_DAYS (configurable)
@@ -162,29 +175,40 @@ app.get("/api/dashboard/stats", async (req, res) => {
             return d;
         };
 
-        const isMonthYear = (date: Date, month: number, year: number) =>
-            date.getMonth() === month && date.getFullYear() === year;
-
-        // Main card value: balance of brides whose payment deadline falls in the current month
-        // (or has already passed — i.e. deadline <= end of current month)
-        const pendingThisMonth = bridesWithBalance
+        // Main card value: balance of brides whose payment deadline falls in the selected period
+        const pendingSelectedPeriod = bridesWithBalance
             .filter(b => {
                 const dl = getDeadline(b.event_date);
                 if (!dl) return false;
-                // Deadline is in the current month OR already overdue (before current month)
-                const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
-                return dl <= endOfMonth;
+
+                if (queryMonth === 'all') {
+                    return dl.getFullYear() === targetYear;
+                } else {
+                    // Specific month: show what is due in that month OR overdue if we are in that month
+                    const isDueInMonth = dl.getFullYear() === targetYear && dl.getMonth() === targetMonth;
+
+                    // If we are looking at the REAL current month, include overdue
+                    const realToday = new Date();
+                    const isLookingAtRealCurrentMonth = targetYear === realToday.getFullYear() && targetMonth === realToday.getMonth();
+
+                    if (isLookingAtRealCurrentMonth) {
+                        const endOfTargetMonth = new Date(targetYear, targetMonth! + 1, 0, 23, 59, 59);
+                        return dl <= endOfTargetMonth;
+                    }
+
+                    return isDueInMonth;
+                }
             })
             .reduce((sum, b) => sum + pureNum(b.balance), 0);
 
         const yearlyPending = bridesWithBalance
             .filter(b => {
                 const dl = getDeadline(b.event_date);
-                return dl && dl.getFullYear() === currentYear;
+                return dl && dl.getFullYear() === targetYear;
             })
             .reduce((sum, b) => sum + pureNum(b.balance), 0);
 
-        const pendingPayments = pendingThisMonth;
+        const pendingPayments = pendingSelectedPeriod;
 
         // Breakdown by year of payment deadline
         const pending2026 = bridesWithBalance
@@ -199,7 +223,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
 
         // BRIDES/EVENTS CALCULATION: Grouped by event year
         const activeEventsThisMonth = activeBrides
-            .filter(b => isThisMonth(b.event_date)).length;
+            .filter(b => isSelectedPeriod(b.event_date)).length;
 
         const activeEvents2026 = activeBrides.filter(b => (b.event_date || '').startsWith('2026')).length;
         const activeEvents2027 = activeBrides.filter(b => (b.event_date || '').startsWith('2027')).length;
@@ -212,28 +236,74 @@ app.get("/api/dashboard/stats", async (req, res) => {
         const chartData = [];
         const monthNames = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const m = d.getMonth(); const y = d.getFullYear();
+        if (queryMonth === 'all') {
+            // Show all 12 months of the selected year
+            for (let m = 0; m < 12; m++) {
+                const y = targetYear;
 
-            const rev = allPayments.filter(p => {
-                const pts = (p.payment_date || '').split('T')[0].split('-');
-                return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m && isPaid(p.status) && pureNum(p.amount_paid) > 0;
-            }).reduce((s, p) => s + pureNum(p.amount_paid), 0);
+                const rev = allPayments.filter(p => {
+                    const pts = (p.payment_date || '').split('T')[0].split('-');
+                    return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m && isPaid(p.status) && pureNum(p.amount_paid) > 0;
+                }).reduce((s, p) => s + pureNum(p.amount_paid), 0);
 
-            const expT = allExpenses.filter(e => {
-                const pts = (e.date || '').split('T')[0].split('-');
-                return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m;
-            }).reduce((s, e) => s + pureNum(e.amount), 0);
+                const expT = allExpenses.filter(e => {
+                    const pts = (e.date || '').split('T')[0].split('-');
+                    return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m;
+                }).reduce((s, e) => s + pureNum(e.amount), 0);
 
-            const expL = allPayments.filter(p => {
-                const pts = (p.payment_date || '').split('T')[0].split('-');
-                const isM = pts.length >= 2 && (parseInt(pts[1]) - 1) === m && parseInt(pts[0]) === y;
-                return isM && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0);
-            }).reduce((s, p) => s + Math.abs(pureNum(p.amount_paid)), 0);
+                const expL = allPayments.filter(p => {
+                    const pts = (p.payment_date || '').split('T')[0].split('-');
+                    const isM = pts.length >= 2 && (parseInt(pts[1]) - 1) === m && parseInt(pts[0]) === y;
+                    return isM && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0);
+                }).reduce((s, p) => s + Math.abs(pureNum(p.amount_paid)), 0);
 
-            chartData.push({ month: monthNames[m], revenue: rev, expenses: expT + expL });
+                chartData.push({ month: monthNames[m], revenue: rev, expenses: expT + expL });
+            }
+        } else {
+            // Show last 6 months leading up to the selected month
+            for (let i = 5; i >= 0; i--) {
+                const d = new Date(targetYear, targetMonth! - i, 1);
+                const m = d.getMonth(); const y = d.getFullYear();
+
+                const rev = allPayments.filter(p => {
+                    const pts = (p.payment_date || '').split('T')[0].split('-');
+                    return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m && isPaid(p.status) && pureNum(p.amount_paid) > 0;
+                }).reduce((s, p) => s + pureNum(p.amount_paid), 0);
+
+                const expT = allExpenses.filter(e => {
+                    const pts = (e.date || '').split('T')[0].split('-');
+                    return pts.length >= 2 && parseInt(pts[0]) === y && (parseInt(pts[1]) - 1) === m;
+                }).reduce((s, e) => s + pureNum(e.amount), 0);
+
+                const expL = allPayments.filter(p => {
+                    const pts = (p.payment_date || '').split('T')[0].split('-');
+                    const isM = pts.length >= 2 && (parseInt(pts[1]) - 1) === m && parseInt(pts[0]) === y;
+                    return isM && (String(p.bride_id) === '212' || pureNum(p.amount_paid) < 0);
+                }).reduce((s, p) => s + Math.abs(pureNum(p.amount_paid)), 0);
+
+                chartData.push({ month: monthNames[m], revenue: rev, expenses: expT + expL });
+            }
         }
+
+        // F. PHASE 1 & CANCELLATIONS
+        const activeBridesInPeriod = activeBrides.filter(b => isSelectedPeriod(b.event_date));
+        const totalContractValueInPeriod = activeBridesInPeriod.reduce((sum, b) => sum + pureNum(b.contract_value), 0);
+        const ticketMedio = activeBridesInPeriod.length > 0 ? (totalContractValueInPeriod / activeBridesInPeriod.length) : 0;
+
+        const efficiency = monthlyRevenue > 0 ? ((monthlyRevenue - currentExpenses) / monthlyRevenue) * 100 : 0;
+        const mediaMensal = yearlyRevenue / 12;
+
+        // YoY (Year Over Year) Growth
+        const prevYearRevenue = allPayments
+            .filter(p => p.payment_date?.startsWith((targetYear - 1).toString()) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
+            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+        const growthYoY = calcTrend(yearlyRevenue, prevYearRevenue);
+
+        // Cancellations Analysis
+        const canceledBrides = (brides || []).filter(b => (b.status || '').toLowerCase() === 'cancelado');
+        const canceledInPeriod = canceledBrides.filter(b => isSelectedPeriod(b.event_date));
+        const canceledRevenue = canceledInPeriod.reduce((sum, b) => sum + pureNum(b.contract_value), 0); // Contract value for canceled is the fine
+        const lostRevenue = canceledInPeriod.reduce((sum, b) => sum + (pureNum(b.original_value) - pureNum(b.contract_value)), 0);
 
         res.json({
             activeBrides: activeEventsThisMonth,
@@ -249,7 +319,18 @@ app.get("/api/dashboard/stats", async (req, res) => {
             monthlyExpenses: currentExpenses,
             yearlyExpenses,
             expensesTrend,
-            chartData: chartData
+            chartData: chartData,
+            // Phase 1 Extras
+            ticketMedio,
+            efficiency: efficiency.toFixed(1).replace('.', ',') + "%",
+            mediaMensal,
+            growthYoY,
+            // Cancellation Extras
+            cancellations: {
+                count: canceledInPeriod.length,
+                revenue: canceledRevenue,
+                lost: lostRevenue
+            }
         });
     } catch (error) {
         console.error("Dashboard stats error:", error);

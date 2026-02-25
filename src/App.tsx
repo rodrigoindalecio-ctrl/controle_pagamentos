@@ -1,4 +1,20 @@
+// Componente mínimo SidebarItem
+function SidebarItem({ icon: Icon, label, active, onClick }: any) {
+  return (
+    <button
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${active ? 'bg-[#883545]/10 text-[#883545]' : 'text-slate-700 hover:bg-slate-50'}`}
+      onClick={onClick}
+    >
+      {Icon && <Icon className="w-5 h-5" />}
+      <span>{label}</span>
+    </button>
+  );
+}
 import React, { useState, useEffect } from 'react';
+import DoughnutChart from './DoughnutChart';
+import VolumeValorBarChart from './VolumeValorBarChart';
+import OcupacaoAgendaBarChart from './OcupacaoAgendaBarChart';
+import GhostLinesChart from './GhostLinesChart';
 import {
   Users,
   TrendingUp,
@@ -70,91 +86,156 @@ interface DashboardStats {
     year2027: number;
     year2028: number;
   };
-  activeBridesTrend: string;
-  monthlyRevenue: number;
-  yearlyRevenue: number;
-  revenueBreakdown?: {
-    assessoria: number;
-    bv: number;
-  };
-  revenueTrend: string;
-  pendingPayments: number;
-  yearlyPending: number;
+  eventosAtivos?: number;
+  receita?: number;
+  pendentes?: number;
+  despesas?: number;
+  novosContratos?: number;
+  ticketMedio?: number;
+  eficiencia?: string;
+  crescimentoYoY?: string;
+  cancelamentos?: any;
+  faturamentoProjetado?: number;
+  ocupacaoAgenda?: any;
+  mixReceita?: any;
+  volumeValor?: any;
+  ghostLines?: any;
+  fluxoCaixa?: any;
+  recebimentos?: any;
+  chartData?: Array<{ month: string; revenue: number; expenses: number }>;
+  monthlyRevenue?: number;
+  revenueTrend?: string;
+  pendingPayments?: number;
   pendingBreakdown?: {
     year2026: number;
     year2027: number;
     year2028: number;
   };
-  monthlyExpenses: number;
-  yearlyExpenses: number;
-  expensesTrend: string;
-  chartData: MonthlyStat[];
+  monthlyExpenses?: number;
+  expensesTrend?: string;
+  efficiency?: string;
+  growthYoY?: string;
+  cancellations?: {
+    count: number;
+    revenue: number;
+    lost: number;
+  };
 }
 
-// --- Components ---
-
-const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: { icon: any, label: string, active: boolean, onClick: () => void, badge?: string }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center justify-between px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl transition-all duration-200 group ${active
-      ? 'bg-[#883545] text-white shadow-lg shadow-[#883545]/20'
-      : 'text-slate-500 hover:bg-[#883545]/5 hover:text-[#883545]'
-      }`}
-  >
-    <div className="flex items-center gap-3">
-      <Icon className={`w-4 h-4 lg:w-5 lg:h-5 ${active ? 'text-white' : 'group-hover:text-[#883545]'}`} />
-      <span className="text-xs lg:text-sm font-bold tracking-tight">{label}</span>
+// Implementação mínima de StatCard
+const StatCard = ({ label, value, icon, color, trend, children }: any) => (
+  <div className="bg-white p-4 rounded-xl shadow flex flex-col gap-2">
+    <div className="flex justify-between items-center">
+      <span className="text-xs font-bold text-slate-500">{label}</span>
+      {icon && <span className={color}>{typeof icon === 'string' ? icon : <icon />}</span>}
     </div>
-    {badge && (
-      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${active ? 'bg-white/20 text-white' : 'bg-[#883545]/10 text-[#883545]'}`}>
-        {badge}
-      </span>
-    )}
-  </button>
+    <div>
+      <span className="text-xl font-black">{value}</span>
+      {trend && <span className="ml-2 text-xs">{trend}</span>}
+    </div>
+    {children}
+  </div>
 );
 
-const Header = ({ title, subtitle }: { title: string, subtitle: string }) => (
-  <header className="mb-6 lg:mb-8">
-    <h2 className="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight mb-1 lg:mb-2">{title}</h2>
-    <p className="text-sm lg:text-base text-slate-500">{subtitle}</p>
-  </header>
+// Implementação mínima de Header
+const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
+  <div className="mb-4">
+    <h2 className="text-2xl font-bold text-[#883545]">{title}</h2>
+    {subtitle && <p className="text-slate-500 text-sm mt-1">{subtitle}</p>}
+  </div>
 );
 
-const StatCard = ({ label, value, icon: Icon, trend, color, children }: { label: string, value: string, icon: any, trend?: string, color: string, children?: React.ReactNode }) => {
-  const isNegativeValue = value.includes('-') || (label === "Saldo Líquido" && parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.')) < 0);
-
-  return (
-    <div className="bg-white p-4 lg:p-6 rounded-xl border border-[#883545]/10 shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:border-[#883545]/30 transition-all">
-      <div className="flex justify-between items-start relative z-10">
-        <span className="text-slate-500 text-[10px] lg:text-xs font-bold uppercase tracking-wider">{label}</span>
-        <div className={`p-2 rounded-lg bg-slate-50 ${color} group-hover:scale-110 transition-transform`}>
-          <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-        </div>
-      </div>
-      <div className="relative z-10">
-        <p className={`text-lg lg:text-2xl font-black leading-none mb-1 ${isNegativeValue ? 'text-rose-600' : 'text-slate-900'}`}>{value}</p>
-        {trend && (
-          <div className={`flex items-center gap-1 text-[10px] font-bold ${trend.startsWith('+') ? 'text-emerald-600' :
-            trend.startsWith('-') ? 'text-rose-600' :
-              'text-slate-400'
-            }`}>
-            {trend.startsWith('-') ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-            <span>{trend}</span>
-          </div>
-        )}
-      </div>
-      {children && <div className="mt-2 pt-2 border-t border-slate-50 relative z-10">{children}</div>}
-      <div className={`absolute -right-2 -bottom-2 w-16 h-16 ${color} opacity-[0.03] group-hover:scale-125 transition-transform`}>
-        <Icon className="w-full h-full" />
-      </div>
-    </div>
-  );
-};
-
-const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, key?: string }) => {
+const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, key?: string }) => {
+    // --- Mapa de Ocupação de Agenda ---
+      // --- Forecast de Faturamento Projetado ---
+      const today = new Date();
+      const forecastContratos = brides.filter(b => {
+        if (!b.event_date) return false;
+        const eventDate = new Date(b.event_date);
+        return eventDate > today && (b.status === 'Ativa' || b.status === 'Concluído');
+      });
+      const forecastValor = forecastContratos.reduce((sum, b) => sum + (b.contract_value || 0), 0);
+    const anosAgenda = ['2026', '2027', '2028'];
+    const eventosPorAno = anosAgenda.map(ano =>
+      brides.filter(b => b.event_date && b.event_date.startsWith(ano) && (b.status === 'Ativa' || b.status === 'Concluído')).length
+    );
   if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
 
   const maxVal = Math.max(...(stats.chartData?.map(d => Math.max(d.revenue, d.expenses)) || [1]), 1);
+
+  const months = [
+    { value: '1', label: 'Janeiro' },
+    { value: '2', label: 'Fevereiro' },
+    { value: '3', label: 'Março' },
+    { value: '4', label: 'Abril' },
+    { value: '5', label: 'Maio' },
+    { value: '6', label: 'Junho' },
+    { value: '7', label: 'Julho' },
+    { value: '8', label: 'Agosto' },
+    { value: '9', label: 'Setembro' },
+    { value: '10', label: 'Outubro' },
+    { value: '11', label: 'Novembro' },
+    { value: '12', label: 'Dezembro' }
+  ];
+
+  const periodLabel = filterMonth === 'all' ? `Ano ${filterYear}` : `${months.find(m => m.value === filterMonth)?.label} ${filterYear}`;
+
+  // --- Revenue Mix (Rosca) ---
+    // --- Conversão de Novos Contratos ---
+    const novosContratos = brides.filter(b => {
+      if (!b.created_at) return false;
+      const created = new Date(b.created_at);
+      const year = created.getFullYear();
+      const month = created.getMonth() + 1;
+      if (filterMonth === 'all') return String(year) === filterYear;
+      return String(year) === filterYear && String(month) === filterMonth;
+    }).length;
+  // Agrupa contratos ativos/concluídos do período por tipo de serviço
+  const contractsInPeriod = brides.filter(b => {
+    if (!b.service_type) return false;
+    if (b.status !== 'Ativa' && b.status !== 'Concluído') return false;
+    const eventDate = b.event_date ? new Date(b.event_date) : null;
+    if (!eventDate) return false;
+    const year = eventDate.getFullYear();
+    const month = eventDate.getMonth() + 1;
+    if (filterMonth === 'all') return String(year) === filterYear;
+    return String(year) === filterYear && String(month) === filterMonth;
+  });
+  const mixMap = new Map();
+  contractsInPeriod.forEach(b => {
+    const key = b.service_type || 'Outro';
+    mixMap.set(key, (mixMap.get(key) || 0) + (b.contract_value || 0));
+  });
+  const mixLabels = Array.from(mixMap.keys());
+  const mixData = Array.from(mixMap.values());
+  const mixColors = [
+    '#883545', '#F59E42', '#4F46E5', '#10B981', '#F43F5E', '#FACC15', '#6366F1', '#A21CAF', '#0EA5E9', '#F472B6', '#22D3EE', '#A3E635'
+  ];
+
+  // Ghost Lines: comparativo de receita por mês para anos 2025, 2026, 2027, 2028
+  const ghostYears = ["2025", "2026", "2027", "2028"];
+  const ghostMonths = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+  const ghostDatasets = ghostYears.map((year, idx) => {
+    const data = ghostMonths.map((month, mIdx) => {
+      const monthNum = mIdx + 1;
+      const total = payments
+        .filter(p => {
+          const d = p.payment_date ? new Date(p.payment_date) : null;
+          return d && d.getFullYear() === Number(year) && d.getMonth() + 1 === monthNum && (p.status || '').trim().toLowerCase() === 'pago';
+        })
+        .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+      return total;
+    });
+    return {
+      label: year,
+      data,
+      borderColor: ["#6366F1", "#883545", "#F59E42", "#10B981"][idx],
+      borderDash: idx === 0 ? [6, 4] : undefined,
+      fill: false,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+    };
+  });
 
   return (
     <motion.div
@@ -162,12 +243,42 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 lg:space-y-8 pb-20 lg:pb-0"
     >
-      {/* UI v2.1 */}
-      <Header title="Olá, Rodrigo! 👋" subtitle="Aqui está o resumo da sua assessoria de casamentos hoje." />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <Header title="Olá, Rodrigo! 👋" subtitle="Aqui está o resumo estratégico da sua assessoria." />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
+        {/* Period Filter Bar */}
+        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#883545]/10 shadow-sm">
+          <div className="flex items-center gap-1 px-2 border-r border-slate-100">
+            <Calendar className="size-4 text-[#883545]/40" />
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              className="bg-transparent text-xs font-black uppercase tracking-widest border-none focus:ring-0 cursor-pointer text-slate-700"
+            >
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1 px-2">
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="bg-transparent text-xs font-black uppercase tracking-widest border-none focus:ring-0 cursor-pointer text-slate-700"
+            >
+              <option value="all">Ano Inteiro</option>
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 lg:gap-6">
         <StatCard
-          label="Eventos Ativos Mês"
+          label={`Eventos Ativos (${filterMonth === 'all' ? filterYear : months.find(m => m.value === filterMonth)?.label})`}
           value={stats.activeBrides.toString()}
           icon={Users}
           color="text-[#883545]"
@@ -190,9 +301,9 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
           )}
         </StatCard>
 
-        <StatCard label="Receita (Mês)" value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} trend={`${stats.revenueTrend} vs anterior`} color="text-emerald-500" />
+        <StatCard label={`Receita (${periodLabel})`} value={`R$ ${stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} trend={`${stats.revenueTrend} vs anterior`} color="text-emerald-500" />
         <StatCard
-          label="Pendentes Mês"
+          label={`Pendentes (${periodLabel})`}
           value={`R$ ${stats.pendingPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
           icon={Clock}
           color="text-amber-500"
@@ -215,10 +326,83 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
             </div>
           )}
         </StatCard>
-        <StatCard label="Despesas (Mês)" value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend={`${stats.expensesTrend} vs anterior`} color="text-rose-500" />
+        <StatCard label={`Despesas (${periodLabel})`} value={`R$ ${stats.monthlyExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} trend={`${stats.expensesTrend} vs anterior`} color="text-rose-500" />
+        <StatCard label="Novos Contratos" value={novosContratos.toString()} icon={Plus} color="text-emerald-700" />
       </div>
 
+      <div>
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+          <div className="h-px w-8 bg-slate-200"></div>
+          Inteligência Gerencial (Fase 1)
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <StatCard label="Ticket Médio" value={`R$ ${stats.ticketMedio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={CircleDollarSign} color="text-indigo-500" />
+          <StatCard label="Eficiência Lucro" value={stats.efficiency} icon={Heart} color="text-pink-500" />
+          <StatCard label="Crescimento YoY" value={stats.growthYoY} icon={TrendingUp} color="text-blue-500" />
+          <StatCard label="Média Mensal" value={`R$ ${((stats.chartData && stats.chartData.length > 0) ? Math.round(stats.chartData.reduce((sum, d) => sum + d.revenue, 0) / stats.chartData.length) : 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={Calendar} color="text-slate-600" />
+          <StatCard
+            label="Cancelamentos"
+            value={stats.cancellations.count.toString()}
+            icon={UserMinus}
+            color="text-rose-600"
+          >
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-slate-400">FINA:</span>
+                <span className="text-emerald-600">R$ {stats.cancellations.revenue.toLocaleString('pt-BR')}</span>
+              </div>
+              <div className="flex justify-between text-[10px] font-bold">
+                <span className="text-slate-400">PERDA:</span>
+                <span className="text-rose-500">R$ {stats.cancellations.lost.toLocaleString('pt-BR')}</span>
+              </div>
+            </div>
+          </StatCard>
+          <StatCard label="Faturamento Projetado" value={`R$ ${forecastValor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={TrendingUp} color="text-blue-700" />
+        </div>
+      </div>
+
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                {/* Gráfico Mapa de Ocupação de Agenda */}
+                <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+                  <h3 className="text-lg lg:text-xl font-bold mb-4">Ocupação de Agenda</h3>
+                  <OcupacaoAgendaBarChart
+                    labels={anosAgenda}
+                    values={eventosPorAno}
+                    color="#883545"
+                    title="Eventos Fechados por Ano"
+                  />
+                </div>
+        {/* Gráfico de Rosca: Mix de Receita por Serviço */}
+        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+          <h3 className="text-lg lg:text-xl font-bold mb-4">Mix de Receita por Serviço</h3>
+          {mixLabels.length > 0 ? (
+            <DoughnutChart
+              labels={mixLabels}
+              data={mixData}
+              colors={mixLabels.map((_, i) => mixColors[i % mixColors.length])}
+              title="Receita por Tipo de Serviço"
+            />
+          ) : (
+            <div className="text-slate-400 text-sm italic py-12">Sem contratos no período selecionado.</div>
+          )}
+        </div>
+
+        {/* Gráfico Volume vs Valor por Tipo de Serviço */}
+        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+          <h3 className="text-lg lg:text-xl font-bold mb-4">Volume vs Valor por Tipo</h3>
+          {mixLabels.length > 0 ? (
+            <VolumeValorBarChart
+              labels={mixLabels}
+              volumes={mixLabels.map(label => contractsInPeriod.filter(b => b.service_type === label).length)}
+              valores={mixLabels.map(label => contractsInPeriod.filter(b => b.service_type === label).reduce((sum, b) => sum + (b.contract_value || 0), 0))}
+              colors={["#F59E42", "#883545"]}
+              title="Quantidade x Valor por Serviço"
+            />
+          ) : (
+            <div className="text-slate-400 text-sm italic py-12">Sem contratos no período selecionado.</div>
+          )}
+        </div>
         <div className="lg:col-span-2 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
           <div className="flex justify-between items-center mb-6 lg:mb-8">
             <div>
@@ -249,51 +433,57 @@ const DashboardView = ({ stats, payments, brides, onViewAll }: { stats: Dashboar
           </div>
         </div>
 
+        {/* Ghost Lines Chart: Comparativo de anos */}
+        <div className="lg:col-span-3 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+          <h3 className="text-lg lg:text-xl font-bold mb-4">Comparativo de Receita por Ano</h3>
+          <GhostLinesChart
+            labels={ghostMonths}
+            datasets={ghostDatasets}
+            title="Receita Mensal por Ano"
+          />
+        </div>
         <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10">
           <h3 className="text-lg lg:text-xl font-bold mb-4 lg:mb-6">Alertas de Pendência</h3>
           <div className="flex flex-col gap-4 lg:gap-5 min-h-[100px]">
             {(() => {
-              const alerts = brides
-                .filter(b => b.status === 'Ativa')
-                .map(b => {
-                  const balance = Number(b.balance) || 0;
-                  const eventDate = new Date(b.event_date);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const diffTime = eventDate.getTime() - today.getTime();
-                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                  return { ...b, balance, diffDays };
-                })
-                .filter(b => b.balance > 1) // ignora diferenças de centavos
-                .sort((a, b) => a.diffDays - b.diffDays)
-                .slice(0, 5);
+              // Lista dos próximos 10 pagamentos a vencer (clientes ativos com saldo > 1, ordenados por data de evento)
+              const pendentes = brides
+                .filter(b => b.status === 'Ativa' && Number(b.balance) > 1 && b.event_date)
+                .map(b => ({
+                  id: b.id,
+                  name: b.name,
+                  balance: Number(b.balance),
+                  eventDate: new Date(b.event_date),
+                }))
+                .sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime())
+                .slice(0, 10);
 
-              if (alerts.length === 0) {
+              if (pendentes.length === 0) {
                 return (
                   <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-8 text-center">
                     <CircleDollarSign className="w-8 h-8 opacity-20 mb-2" />
-                    <p className="text-xs italic">Tudo em dia!</p>
+                    <p className="text-xs italic">Nenhum recebimento pendente.</p>
                   </div>
                 );
               }
 
-              return alerts.map((bride) => (
-                <div key={bride.id} className="flex items-center gap-3 lg:gap-4 group">
-                  <div className={`size-10 lg:size-12 rounded-xl flex flex-col items-center justify-center font-bold transition-all ${bride.diffDays <= 10 ? 'bg-rose-100 text-rose-600 shadow-sm' : 'bg-[#883545]/5 text-[#883545]'}`}>
-                    <span className="text-[14px] lg:text-[16px] leading-none">{bride.diffDays}</span>
-                    <span className="text-[7px] lg:text-[8px] uppercase tracking-tighter">DIAS</span>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-bold truncate">{bride.name}</p>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${bride.diffDays <= 10 ? 'text-rose-500' : 'text-slate-400'}`}>
-                        A PAGAR: R$ {bride.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
+              return pendentes.map((b) => {
+                const today = new Date();
+                const daysLeft = Math.ceil((b.eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const vencendo = daysLeft <= 10 && daysLeft >= 0;
+                return (
+                  <div key={b.id} className="flex items-center gap-4 py-3 border-b border-slate-100 last:border-none group">
+                    <div className="w-16 h-16 flex flex-col items-center justify-center font-black">
+                      <span className={`text-lg font-black rounded-xl px-3 py-1 mb-1 ${vencendo ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>{Math.max(daysLeft, 0)}<span className="text-[10px] font-bold ml-1">DIAS</span></span>
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-bold truncate text-slate-800 mb-1">{b.name}</p>
+                      <p className="text-xs font-black uppercase tracking-widest text-[#883545]">A PAGAR: <span className="text-base font-bold">R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
+                    </div>
+                    {vencendo && <span className="w-3 h-3 rounded-full bg-rose-500 ml-2"></span>}
                   </div>
-                  {bride.diffDays <= 10 && <div className="size-2 rounded-full bg-rose-500 animate-pulse shrink-0" />}
-                </div>
-              ));
+                );
+              });
             })()}
             <button
               onClick={onViewAll}
@@ -401,6 +591,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
   const [brideForDistrato, setBrideForDistrato] = useState<Bride | null>(null);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const calculateBalance = (bride: Bride) => {
     const totalPaid = payments
@@ -435,7 +626,101 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
       </div>
 
       {/* Sugestão de Filtros */}
-      <div className="bg-white p-4 rounded-2xl border border-[#883545]/10 shadow-sm flex flex-col md:flex-row gap-4 items-end">
+      {/* Filtros colapsados no mobile */}
+      <div className="lg:hidden flex justify-end mb-4">
+        <button
+          className="px-4 py-2 bg-[#883545] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#883545]/90 transition-all"
+          onClick={() => setIsFilterModalOpen(true)}
+        >
+          <Filter className="w-5 h-5" /> Filtrar
+        </button>
+      </div>
+      {/* Modal de filtros para mobile */}
+      <AnimatePresence>
+        {isFilterModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsFilterModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-[#883545]/10">
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Buscar Cliente</label>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Nome ou email..."
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      <option>Ativa</option>
+                      <option>Concluído</option>
+                      <option>Inativa</option>
+                      <option>Cancelado</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ano</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={yearFilter}
+                      onChange={(e) => setYearFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Saldo</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={balanceFilter}
+                      onChange={(e) => setBalanceFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      <option>Com Pendência</option>
+                      <option>Sem Pendência</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); setYearFilter('Todos'); setBalanceFilter('Todos'); }}
+                  className="w-full p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
+                  title="Limpar Filtros"
+                >
+                  <Filter className="w-5 h-5" /> Limpar Filtros
+                </button>
+                <button
+                  onClick={() => setIsFilterModalOpen(false)}
+                  className="w-full mt-2 py-3 bg-[#883545] text-white rounded-xl font-bold hover:bg-[#883545]/90 transition-all"
+                >
+                  Aplicar Filtros
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Filtros normais no desktop */}
+      <div className="hidden lg:flex bg-white p-4 rounded-2xl border border-[#883545]/10 shadow-sm flex-col md:flex-row gap-4 items-end">
         <div className="flex-1 w-full space-y-1.5">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Buscar Cliente</label>
           <div className="relative">
@@ -449,7 +734,6 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
             />
           </div>
         </div>
-
         <div className="w-full md:w-40 space-y-1.5">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
           <div className="relative">
@@ -467,7 +751,6 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         </div>
-
         <div className="w-full md:w-32 space-y-1.5">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ano</label>
           <div className="relative">
@@ -482,7 +765,6 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         </div>
-
         <div className="w-full md:w-48 space-y-1.5">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Saldo</label>
           <div className="relative">
@@ -498,7 +780,6 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         </div>
-
         <button
           onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); setYearFilter('Todos'); setBalanceFilter('Todos'); }}
           className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
@@ -552,7 +833,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                           <XCircle className="w-3.5 h-3.5" /> Cancelar
                         </button>
                         <div className="h-px bg-slate-50 my-1" />
-                        <button onClick={() => onDelete(bride.id)} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                        <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" /> Excluir Cliente
                         </button>
                       </div>
@@ -738,6 +1019,51 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
 // --- Finance View ---
 
 const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
+  // Filtros para lançamentos recentes
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('Todos');
+  const [dateFilter, setDateFilter] = useState('Todos');
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  // Filtragem dos lançamentos recentes
+  const allItems = [
+    ...payments.map(p => ({ ...p, isExpense: false })),
+    ...expenses.map(e => ({ ...e, bride_name: `Despesa: ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))
+  ];
+  const filteredItems = allItems
+    .filter(item => {
+      // Filtro de busca
+      const searchMatch = item.bride_name.toLowerCase().includes(searchTerm.toLowerCase()) || (item.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+      // Filtro de tipo
+      const typeMatch = typeFilter === 'Todos' || (typeFilter === 'Receita' && !item.isExpense) || (typeFilter === 'Despesa' && item.isExpense);
+      // Filtro de data
+      let dateMatch = true;
+      const itemDate = new Date(item.payment_date);
+      if (dateFilter === 'Hoje') {
+        const today = new Date();
+        dateMatch = itemDate.toDateString() === today.toDateString();
+      } else if (dateFilter === 'Últimos 7 dias') {
+        const today = new Date();
+        const diff = (today.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
+        dateMatch = diff >= 0 && diff <= 7;
+      } else if (dateFilter === 'Últimos 30 dias') {
+        const today = new Date();
+        const diff = (today.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
+        dateMatch = diff >= 0 && diff <= 30;
+      } else if (dateFilter === 'Personalizado') {
+        if (customStart && customEnd) {
+          const start = new Date(customStart);
+          const end = new Date(customEnd);
+          dateMatch = itemDate >= start && itemDate <= end;
+        } else {
+          dateMatch = true;
+        }
+      }
+      return searchMatch && typeMatch && dateMatch;
+    })
+    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
+    .slice(0, 30);
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
@@ -818,13 +1144,102 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
       className="space-y-6 pb-20 lg:pb-0"
     >
       <Header title="Gestão Financeira" subtitle="Controle total de entradas e despesas da sua assessoria de casamentos." />
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
-        <StatCard label="Total Ganho (Ano)" value={`R$ ${totalRecebidoAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={TrendingUp} color="text-emerald-500" />
-        <StatCard label="Despesas (Ano)" value={`R$ ${totalDespesasAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} color="text-rose-500" />
-        <StatCard label="Saldo Líquido (Ano)" value={`R$ ${(totalRecebidoAno - totalDespesasAno).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={CircleDollarSign} color="text-[#883545]" />
-        <StatCard label="A Receber (Ano)" value={`R$ ${totalPendenteAno.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Clock} color="text-amber-500" />
+      {/* Filtros colapsados para lançamentos recentes (mobile) */}
+      <div className="flex justify-end mb-4">
+        <button
+          className="px-4 py-2 bg-[#883545] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#883545]/90 transition-all"
+          onClick={() => setIsFilterModalOpen(true)}
+        >
+          <Filter className="w-5 h-5" /> Filtrar
+        </button>
       </div>
+      <AnimatePresence>
+        {isFilterModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsFilterModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-[#883545]/10">
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Buscar Lançamento</label>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Descrição ou origem..."
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      <option>Receita</option>
+                      <option>Despesa</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      <option>Hoje</option>
+                      <option>Últimos 7 dias</option>
+                      <option>Últimos 30 dias</option>
+                      <option>Personalizado</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  {dateFilter === 'Personalizado' && (
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="date"
+                        value={customStart}
+                        onChange={e => setCustomStart(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-[#883545]/20"
+                        placeholder="Data inicial"
+                      />
+                      <input
+                        type="date"
+                        value={customEnd}
+                        onChange={e => setCustomEnd(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-[#883545]/20"
+                        placeholder="Data final"
+                      />
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setSearchTerm(''); setTypeFilter('Todos'); setDateFilter('Todos'); }}
+                  className="w-full p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
+                  title="Limpar Filtros"
+                >
+                  <Filter className="w-5 h-5" /> Limpar Filtros
+                </button>
+                <button
+                  onClick={() => setIsFilterModalOpen(false)}
+                  className="w-full mt-2 py-3 bg-[#883545] text-white rounded-xl font-bold hover:bg-[#883545]/90 transition-all"
+                >
+                  Aplicar Filtros
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         <div className="lg:col-span-1">
@@ -919,7 +1334,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
               </div>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Data {type === 'entrada' ? 'do Pagamento' : 'da Despesa'}</label>
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Data {type === 'entrada' ? 'do Pagamento' : 'da Despesa'}</label>
                   <input
                     required
                     type="date"
@@ -929,7 +1344,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Valor (R$)</label>
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Valor (R$)</label>
                   <input
                     required
                     type="number"
@@ -943,7 +1358,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
               </div>
               {type === 'saida' && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</label>
+                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Categoria</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -974,10 +1389,10 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
               </div>
             </div>
             <div className="lg:hidden p-4 space-y-4">
-              {[...payments, ...expenses.map(e => ({ ...e, bride_name: `[DESPESA] ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))]
-                .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
-                .slice(0, 20)
-                .map((item: any) => (
+              {filteredItems.length === 0 ? (
+                <div className="px-6 py-12 text-center text-slate-400 italic font-medium">Nenhum lançamento encontrado com os filtros aplicados.</div>
+              ) : (
+                filteredItems.map((item: any) => (
                   <div key={item.id + (item.isExpense ? '-exp' : '-pay')} className="p-4 rounded-xl bg-slate-50 border border-[#883545]/5 space-y-3 relative overflow-hidden">
                     <div className={`absolute top-0 left-0 w-1 h-full ${item.isExpense ? 'bg-rose-500' : (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     <div className="flex justify-between items-start">
@@ -1002,7 +1417,8 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                       </span>
                     </div>
                   </div>
-                ))}
+                ))
+              )}
             </div>
 
             <div className="hidden lg:block overflow-x-auto">
@@ -1016,10 +1432,12 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#883545]/5">
-                  {[...payments, ...expenses.map(e => ({ ...e, bride_name: `Despesa: ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))]
-                    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
-                    .slice(0, 30)
-                    .map((item: any) => (
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic font-medium">Nenhum lançamento encontrado com os filtros aplicados.</td>
+                    </tr>
+                  ) : (
+                    filteredItems.map((item: any) => (
                       <tr key={item.id + (item.isExpense ? '-exp' : '-pay')} className="hover:bg-[#883545]/5 transition-colors group">
                         <td className="px-6 py-4">
                           <p className="text-sm font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors">{item.bride_name}</p>
@@ -1028,7 +1446,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                         <td className="px-6 py-4 text-xs font-medium text-slate-600">
                           {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
                         </td>
-                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}> 
                           {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-6 py-4">
@@ -1040,7 +1458,8 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                           </span>
                         </td>
                       </tr>
-                    ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1213,10 +1632,15 @@ export default function App() {
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
 
-  const fetchData = async () => {
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
+  const [filterMonth, setFilterMonth] = useState((new Date().getMonth() + 1).toString());
+
+  const fetchData = async (year?: string, month?: string) => {
     try {
+      const y = year || filterYear;
+      const m = month || filterMonth;
       const [statsRes, bridesRes, paymentsRes, expensesRes] = await Promise.all([
-        fetch('/api/dashboard/stats'),
+        fetch(`/api/dashboard/stats?year=${y}&month=${m}`),
         fetch('/api/brides'),
         fetch('/api/payments'),
         fetch('/api/expenses')
@@ -1233,7 +1657,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [filterYear, filterMonth]);
 
   const handleSaveBride = async (brideData: any) => {
     try {
@@ -1360,6 +1784,10 @@ export default function App() {
                 payments={payments}
                 brides={brides}
                 onViewAll={() => setActiveTab('brides')}
+                filterYear={filterYear}
+                setFilterYear={setFilterYear}
+                filterMonth={filterMonth}
+                setFilterMonth={setFilterMonth}
               />
             )}
             {activeTab === 'brides' && (
