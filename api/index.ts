@@ -293,11 +293,16 @@ app.get("/api/dashboard/stats", async (req, res) => {
         const efficiency = monthlyRevenue > 0 ? ((monthlyRevenue - currentExpenses) / monthlyRevenue) * 100 : 0;
         const mediaMensal = yearlyRevenue / 12;
 
-        // YoY (Year Over Year) Growth
-        const prevYearRevenue = allPayments
-            .filter(p => p.payment_date?.startsWith((targetYear - 1).toString()) && isPaid(p.status) && pureNum(p.amount_paid) > 0)
-            .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
-        const growthYoY = calcTrend(yearlyRevenue, prevYearRevenue);
+        // YoY (Year Over Year) Growth - Baseado em CONTRATOS FECHADOS (Volume de Negócios)
+        const currentYearBookings = (brides || [])
+            .filter(b => b.event_date?.startsWith(targetYear.toString()))
+            .reduce((sum, b) => sum + pureNum(b.contract_value), 0);
+
+        const prevYearBookings = (brides || [])
+            .filter(b => b.event_date?.startsWith((targetYear - 1).toString()))
+            .reduce((sum, b) => sum + pureNum(b.contract_value), 0);
+
+        const growthYoY = calcTrend(currentYearBookings, prevYearBookings);
 
         // Cancellations Analysis
         const canceledBrides = (brides || []).filter(b => (b.status || '').toLowerCase() === 'cancelado');
@@ -325,6 +330,10 @@ app.get("/api/dashboard/stats", async (req, res) => {
             efficiency: efficiency.toFixed(1).replace('.', ',') + "%",
             mediaMensal,
             growthYoY,
+            growthYoYBreakdown: {
+                current: currentYearBookings,
+                previous: prevYearBookings
+            },
             // Cancellation Extras
             cancellations: {
                 count: canceledInPeriod.length,

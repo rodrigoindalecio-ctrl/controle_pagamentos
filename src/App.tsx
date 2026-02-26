@@ -38,7 +38,14 @@ import {
   XCircle,
   UserMinus,
   Award,
-  Trophy
+  Trophy,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  User,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -118,6 +125,10 @@ interface DashboardStats {
   expensesTrend?: string;
   efficiency?: string;
   growthYoY?: string;
+  growthYoYBreakdown?: {
+    current: number;
+    previous: number;
+  };
   cancellations?: {
     count: number;
     revenue: number;
@@ -166,15 +177,17 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 // Implementação mínima de StatCard
-const StatCard = ({ label, value, icon, color, trend, children }: any) => (
+const StatCard = ({ label, value, icon: Icon, color, trend, children }: any) => (
   <div className="bg-white p-4 rounded-xl shadow flex flex-col gap-2">
     <div className="flex justify-between items-center">
       <span className="text-xs font-bold text-slate-500">{label}</span>
-      {icon && <span className={color}>{typeof icon === 'string' ? icon : <icon />}</span>}
+      {Icon && <span className={color}><Icon className="size-4" /></span>}
     </div>
-    <div>
-      <span className="text-xl font-black">{value}</span>
-      {trend && <span className="ml-2 text-xs">{trend}</span>}
+    <div className="flex flex-col">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xl font-black">{value}</span>
+        {trend && <span className={`${trend.includes('+') ? 'text-emerald-500' : 'text-rose-500'} text-[10px] font-bold`}>{trend}</span>}
+      </div>
     </div>
     {children}
   </div>
@@ -183,12 +196,232 @@ const StatCard = ({ label, value, icon, color, trend, children }: any) => (
 // Implementação mínima de Header
 const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   <div className="mb-4">
-    <h2 className="text-2xl font-bold text-[#883545]">{title}</h2>
-    {subtitle && <p className="text-slate-500 text-sm mt-1">{subtitle}</p>}
+    <h2 className="text-2xl font-bold text-[#883545] italic">{title}</h2>
+    {subtitle && <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 opacity-70">{subtitle}</p>}
   </div>
 );
 
-const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string }) => {
+// --- Componente de Loading ---
+const LoadingScreen = ({ logo }: { logo?: string, key?: string }) => (
+  <motion.div
+    initial={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[100] bg-[#FDF8F8] flex flex-col items-center justify-center"
+  >
+    <div className="relative">
+      <motion.div
+        animate={{
+          scale: [1, 1.3, 1],
+          opacity: [0.1, 0.3, 0.1],
+          rotate: [0, 180, 360]
+        }}
+        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 bg-[#883545] rounded-full blur-3xl -z-10"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          opacity: [1, 0.9, 1],
+          boxShadow: [
+            "0 0 20px rgba(136, 53, 69, 0.1)",
+            "0 0 40px rgba(136, 53, 69, 0.2)",
+            "0 0 20px rgba(136, 53, 69, 0.1)"
+          ]
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+        className="size-32 bg-white rounded-[2.8rem] flex items-center justify-center border border-[#883545]/5 overflow-hidden p-7"
+      >
+        {logo ? (
+          <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+        ) : (
+          <Heart className="text-[#883545] w-12 h-12" />
+        )}
+      </motion.div>
+
+      {/* Spinning Ring */}
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+        className="absolute -inset-4 border-2 border-dashed border-[#883545]/10 rounded-[3.5rem]"
+      />
+    </div>
+
+    <div className="mt-12 flex flex-col items-center">
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-[10px] font-black text-[#883545] uppercase tracking-[0.4em] mb-4"
+      >
+        Preparando Experiência
+      </motion.p>
+      <div className="w-32 h-1 bg-slate-100 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: "100%" }}
+          transition={{ duration: 2.4, ease: "easeInOut" }}
+          className="h-full bg-[#883545]"
+        />
+      </div>
+    </div>
+  </motion.div>
+);
+
+// --- Componente de Login ---
+const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any) => void, logo?: string, companyName: string, key?: string }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setError(null);
+
+    // Usa as credenciais salvas no perfil (que podem ser alteradas nas configurações)
+    const savedUser = JSON.parse(localStorage.getItem('wedding_user') || '{}');
+    const validEmail = savedUser.email || 'rodrigoindalecio@hotmail.com';
+    const validPass = savedUser.password || '12345678';
+
+    setTimeout(() => {
+      if (email === validEmail && password === validPass) {
+        onLogin({
+          ...savedUser,
+          email: email
+        });
+      } else {
+        setError('E-mail ou senha incorretos. Tente novamente.');
+        setIsLoggingIn(false);
+      }
+    }, 1500);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FDF8F8] flex items-center justify-center p-6 lg:p-10 relative overflow-hidden w-full">
+      {/* Dynamic Background */}
+      <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-[#883545]/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 opacity-60" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[#F59E42]/5 rounded-full blur-[100px] translate-x-1/2 translate-y-1/2 opacity-40" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{
+          opacity: 1,
+          y: 0,
+          x: error ? [0, -10, 10, -10, 10, 0] : 0
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 100,
+          damping: 20,
+          x: { duration: 0.4 }
+        }}
+        className="w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-[3.5rem] p-10 lg:p-14 shadow-[0_32px_120px_-20px_rgba(136,53,69,0.15)] border border-white/50 relative z-10"
+      >
+        <div className="text-center mb-12">
+          <motion.div
+            whileHover={{ scale: 1.05, rotate: 2 }}
+            className="size-24 bg-white rounded-[2rem] flex items-center justify-center shadow-xl shadow-[#883545]/10 border border-[#883545]/5 overflow-hidden p-5 mx-auto mb-8"
+          >
+            {logo ? (
+              <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <Heart className="text-[#883545] w-10 h-10" />
+            )}
+          </motion.div>
+
+          <div className="space-y-1">
+            <h2 className="text-[10px] font-black text-[#883545]/60 uppercase tracking-[0.3em]">{companyName}</h2>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight italic leading-tight">Acesso Premium</h1>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Gestão Estratégica</p>
+          </div>
+        </div>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3"
+          >
+            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+            <p className="text-xs font-bold text-red-600 uppercase tracking-tight leading-tight">{error}</p>
+          </motion.div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">E-mail Corporativo</label>
+            <div className="relative group">
+              <div className="absolute left-5 top-1/2 -translate-y-1/2 transition-transform group-focus-within:scale-110">
+                <Mail className="w-4 h-4 text-[#883545]/40 group-focus-within:text-[#883545] transition-colors" />
+              </div>
+              <input
+                type="email"
+                placeholder="rodrigoindalecio@hotmail.com"
+                className="w-full pl-14 pr-6 py-5 bg-white border border-slate-100 rounded-[1.5rem] text-sm font-bold shadow-sm focus:ring-4 focus:ring-[#883545]/5 focus:border-[#883545]/20 focus:bg-white transition-all outline-none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Chave de Acesso</label>
+            <div className="relative group">
+              <div className="absolute left-5 top-1/2 -translate-y-1/2 transition-transform group-focus-within:scale-110">
+                <Lock className="w-4 h-4 text-[#883545]/40 group-focus-within:text-[#883545] transition-colors" />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••••••"
+                className="w-full pl-14 pr-14 py-5 bg-white border border-slate-100 rounded-[1.5rem] text-sm font-bold shadow-sm focus:ring-4 focus:ring-[#883545]/5 focus:border-[#883545]/20 focus:bg-white transition-all outline-none"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 p-2 text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              disabled={isLoggingIn}
+              className="w-full py-5 bg-[#883545] text-white rounded-[1.5rem] font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(136,53,69,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-4 relative overflow-hidden group disabled:opacity-90"
+            >
+              <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+              {isLoggingIn ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full relative z-10"
+                />
+              ) : (
+                <ShieldCheck className="w-5 h-5 relative z-10" />
+              )}
+              <span className="relative z-10">ENTRAR NO PORTAL</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 pt-4">
+            <Sparkles className="w-3 h-3 text-[#F59E42]" />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sistema Seguro & Criptografado</p>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings, userProfile }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string, userProfile: any }) => {
   const currentYear = new Date().getFullYear();
   // --- Mapa de Ocupação de Agenda ---
   // --- Forecast de Faturamento Projetado ---
@@ -203,6 +436,9 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   const eventosPorAno = anosAgenda.map(ano =>
     brides.filter(b => b.event_date && b.event_date.startsWith(ano) && (b.status === 'Ativa' || b.status === 'Concluído')).length
   );
+
+  const [showGrowthDetail, setShowGrowthDetail] = useState(false);
+
   if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
 
   const maxVal = Math.max(...(stats.chartData?.map(d => Math.max(d.revenue, d.expenses)) || [1]), 1);
@@ -344,7 +580,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
       className="space-y-6 lg:space-y-8 pb-20 lg:pb-0"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <Header title="Olá, Rodrigo! 👋" subtitle="Aqui está o resumo estratégico da sua assessoria." />
+        <Header title={`Olá, ${userProfile.name.split(' ')[0]}! 👋`} subtitle="Aqui está o resumo estratégico da sua assessoria." />
 
         {/* Period Filter Bar */}
         <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#883545]/10 shadow-sm">
@@ -449,14 +685,56 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
       </div>
 
       <div>
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-          <div className="h-px w-8 bg-slate-200"></div>
-          Inteligência Gerencial (Fase 1)
-        </h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="Ticket Médio" value={`R$ ${stats.ticketMedio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={CircleDollarSign} color="text-indigo-500" />
           <StatCard label="Eficiência Lucro" value={stats.efficiency} icon={Heart} color="text-pink-500" />
-          <StatCard label="Crescimento YoY" value={stats.growthYoY} icon={TrendingUp} color="text-blue-500" />
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowGrowthDetail(!showGrowthDetail);
+            }}
+            className="cursor-pointer group relative touch-none select-none transition-transform active:scale-95"
+          >
+            <StatCard
+              label="Evolução Comercial"
+              value={stats.growthYoY}
+              icon={TrendingUp}
+              color="text-blue-500"
+            >
+              <AnimatePresence>
+                {showGrowthDetail && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="space-y-1 overflow-hidden pt-1 border-t border-slate-50 mt-1"
+                  >
+                    {stats.growthYoYBreakdown ? (
+                      <>
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
+                          <span className="text-slate-400">{filterYear}:</span>
+                          <span className="text-blue-600 font-black">R$ {stats.growthYoYBreakdown.current.toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
+                          <span className="text-slate-400">{Number(filterYear) - 1}:</span>
+                          <span className="text-blue-600/60 font-black">R$ {stats.growthYoYBreakdown.previous.toLocaleString('pt-BR')}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-[9px] font-bold text-slate-400 italic text-center py-1">
+                        Reinicie o servidor para carregar detalhes...
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {!showGrowthDetail && (
+                <div className="text-[8px] font-black text-blue-400/50 uppercase tracking-widest text-center mt-1 group-hover:text-blue-500 transition-colors">
+                  Clique para detalhes
+                </div>
+              )}
+            </StatCard>
+          </div>
           <StatCard label="Serviço +Vendido" value={bestSellingService} icon={Award} color="text-amber-500" />
           <StatCard
             label="Melhor Parceiro BV"
@@ -1654,8 +1932,10 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
   );
 };
 
-const SettingsView = ({ settings, setSettings, data }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, key?: string }) => {
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, key?: string }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [newPass, setNewPass] = useState('');
 
   const handleExport = () => {
     const backup = {
@@ -1777,7 +2057,7 @@ const SettingsView = ({ settings, setSettings, data }: { settings: AppSettings, 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome da Assessoria</label>
                   <input
@@ -1795,6 +2075,85 @@ const SettingsView = ({ settings, setSettings, data }: { settings: AppSettings, 
                     onChange={e => setSettings({ ...settings, profile: { ...settings.profile, description: e.target.value } })}
                     className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner"
                   />
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-3">
+                  <User className="text-[#883545] w-6 h-6" />
+                  Perfil do Usuário
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Completo</label>
+                    <input
+                      type="text"
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner"
+                      value={userProfile.name}
+                      onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mail de Acesso</label>
+                    <input
+                      type="email"
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner"
+                      value={userProfile.email}
+                      onChange={(e) => setUserProfile({ ...userProfile, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 lg:p-8 rounded-[2rem] border border-slate-100 space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 bg-[#883545]/10 rounded-xl flex items-center justify-center text-[#883545]">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">Segurança da Conta</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Altere sua senha de acesso ao portal</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nova Senha</label>
+                      <div className="relative group">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          className="w-full p-4 pr-14 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-2 focus:ring-[#883545]/20 group-hover:border-[#883545]/20 transition-all outline-none"
+                          placeholder="Min. 8 caracteres"
+                          value={newPass}
+                          onChange={(e) => setNewPass(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-[#883545] transition-colors"
+                        >
+                          {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={() => {
+                          if (newPass.length < 8) {
+                            alert('A senha deve ter pelo menos 8 caracteres!');
+                            return;
+                          }
+                          setUserProfile({ ...userProfile, password: newPass });
+                          setNewPass('');
+                          setShowNewPassword(false);
+                          alert('Senha alterada com sucesso! ✓');
+                        }}
+                        className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-[#883545] transition-all flex items-center justify-center gap-2"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        Atualizar Senha
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1988,7 +2347,7 @@ const SettingsView = ({ settings, setSettings, data }: { settings: AppSettings, 
           )}
         </div>
       </div>
-    </motion.div>
+    </motion.div >
   );
 };
 
@@ -2132,6 +2491,18 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { is
 // --- Main App ---
 
 export default function App() {
+  const mainContentRef = React.useRef<HTMLDivElement>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('wedding_auth') === 'true');
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(() => {
+    const saved = localStorage.getItem('wedding_user');
+    return saved ? JSON.parse(saved) : {
+      name: 'Rodrigo Indalecio',
+      email: 'rodrigoindalecio@hotmail.com',
+      password: '12345678'
+    };
+  });
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [brides, setBrides] = useState<Bride[]>([]);
@@ -2147,11 +2518,35 @@ export default function App() {
   });
 
   useEffect(() => {
+    localStorage.setItem('wedding_auth', isAuthenticated.toString());
+    localStorage.setItem('wedding_user', JSON.stringify(userProfile));
+  }, [isAuthenticated, userProfile]);
+
+  useEffect(() => {
+    // Simulando carregamento inicial premium
+    const timer = setTimeout(() => setIsInitialLoading(false), 2400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('wedding_settings', JSON.stringify(settings));
   }, [settings]);
 
   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
   const [filterMonth, setFilterMonth] = useState((new Date().getMonth() + 1).toString());
+
+  // Reset scroll to top and filters when tab changes
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Always reset dashboard to current period when entering the tab
+    if (activeTab === 'dashboard') {
+      setFilterYear(new Date().getFullYear().toString());
+      setFilterMonth((new Date().getMonth() + 1).toString());
+    }
+  }, [activeTab]);
 
   const fetchData = async (year?: string, month?: string) => {
     try {
@@ -2252,143 +2647,189 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#FDF8F8] text-slate-900 overflow-hidden font-sans">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-72 bg-white border-r border-[#883545]/10 flex-col p-6 shadow-2xl shadow-[#883545]/5 z-20">
-        <div className="flex items-center gap-3 mb-10 px-2 group cursor-pointer">
-          <div className="size-12 bg-white rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-[#883545]/10 group-hover:rotate-6 transition-transform overflow-hidden border border-[#883545]/5">
-            {settings.profile.logo ? (
-              <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
-            ) : (
-              <div className="size-full bg-[#883545] flex items-center justify-center">
-                <Heart className="text-white w-7 h-7" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-sm lg:text-base font-black text-[#883545] tracking-tight leading-tight uppercase">
-              {settings.profile.name}
-            </h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight mt-1">
-              {settings.profile.description}
-            </p>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-2">
-          <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => setActiveTab('brides')} />
-          <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />
-          <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
-        </nav>
-
-        <div className="mt-auto pt-6 border-t border-[#883545]/10">
-          <div className="flex items-center gap-4 px-2 mb-6 group cursor-pointer">
-            <div className="size-10 bg-[#883545]/10 rounded-xl flex items-center justify-center text-[#883545] font-black group-hover:bg-[#883545]/20 transition-colors">RS</div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-black text-slate-800 truncate leading-none mb-1">Rodrigo Silva</p>
-              <button onClick={() => { }} className="flex items-center gap-1 text-[10px] font-bold text-[#883545]/60 hover:text-[#883545] transition-colors">
-                <LogOut className="w-3 h-3" />
-                SAIR DA CONTA
-              </button>
-            </div>
-          </div>
-          {activeTab === 'brides' && (
-            <button
-              onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-              className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="uppercase tracking-widest text-xs">Novo Evento</span>
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Mobile Top Branding */}
-        <div className="lg:hidden bg-white/90 backdrop-blur-md border-b border-[#883545]/10 px-6 py-4 flex items-center justify-between z-30 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="size-11 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#883545]/5 overflow-hidden border border-[#883545]/10">
+      {isAuthenticated && (
+        <aside className="hidden lg:flex w-72 bg-white border-r border-[#883545]/10 flex-col p-6 shadow-2xl shadow-[#883545]/5 z-20">
+          <div className="flex items-center gap-3 mb-10 px-2 group cursor-pointer">
+            <div className="size-12 bg-white rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-[#883545]/10 group-hover:rotate-6 transition-transform overflow-hidden border border-[#883545]/5">
               {settings.profile.logo ? (
                 <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
               ) : (
                 <div className="size-full bg-[#883545] flex items-center justify-center">
-                  <Heart className="text-white w-6 h-6" />
+                  <Heart className="text-white w-7 h-7" />
                 </div>
               )}
             </div>
-            <div className="flex flex-col">
-              <h2 className="text-xs font-black text-[#883545] uppercase tracking-tighter leading-tight">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm lg:text-base font-black text-[#883545] tracking-tight leading-tight uppercase">
                 {settings.profile.name}
-              </h2>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
+              </h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight mt-1">
                 {settings.profile.description}
-              </span>
+              </p>
             </div>
           </div>
-          <div className="size-9 bg-[#883545]/5 rounded-xl flex items-center justify-center text-[#883545] text-xs font-black border border-[#883545]/5">
-            RS
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-hide">
-          <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && (
-              <DashboardView
-                key="dash"
-                stats={stats}
-                payments={payments}
-                brides={brides}
-                onViewAll={() => setActiveTab('brides')}
-                filterYear={filterYear}
-                setFilterYear={setFilterYear}
-                filterMonth={filterMonth}
-                setFilterMonth={setFilterMonth}
-                settings={settings}
-              />
-            )}
-            {activeTab === 'brides' && (
-              <BridesView
-                key="brides"
-                brides={brides}
-                payments={payments}
-                onEdit={(bride) => { setBrideToEdit(bride); setIsBrideModalOpen(true); }}
-                onUpdateStatus={handleUpdateBrideStatus}
-                onDelete={handleDeleteBride}
-                settings={settings}
-              />
-            )}
-            {activeTab === 'finance' && (
-              <FinanceView
-                key="finance"
-                payments={payments}
-                expenses={expenses}
-                brides={brides}
-                stats={stats}
-                settings={settings}
-                onAddPayment={handleAddPayment}
-                onAddExpense={handleAddExpense}
-              />
-            )}
-            {activeTab === 'settings' && (
-              <SettingsView
-                key="settings"
-                settings={settings}
-                setSettings={setSettings}
-                data={{ brides, payments, expenses }}
-              />
-            )}
-          </AnimatePresence>
-        </div>
 
-        {/* Mobile Floating Action Button */}
-        {activeTab === 'brides' && (
-          <button
-            onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-            className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
-          >
-            <Plus className="w-8 h-8" />
-          </button>
-        )}
+          <nav className="flex-1 space-y-2">
+            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+            <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => setActiveTab('brides')} />
+            <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />
+            <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+          </nav>
+
+          <div className="mt-auto pt-6 border-t border-[#883545]/10">
+            <div className="flex items-center gap-4 px-2 mb-6 group cursor-pointer">
+              <div className="size-10 bg-[#883545]/10 rounded-xl flex items-center justify-center text-[#883545] font-black group-hover:bg-[#883545]/20 transition-colors uppercase">
+                {userProfile.name.split(' ').map((n: any) => n[0]).join('').slice(0, 2)}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="text-sm font-black text-slate-800 truncate leading-none mb-1 uppercase tracking-tighter">{userProfile.name}</p>
+                <button onClick={() => { setIsAuthenticated(false); setActiveTab('dashboard'); }} className="flex items-center gap-1 text-[10px] font-bold text-[#883545]/60 hover:text-[#883545] transition-colors">
+                  <LogOut className="w-3 h-3" />
+                  SAIR DA CONTA
+                </button>
+              </div>
+            </div>
+            {activeTab === 'brides' && (
+              <button
+                onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="uppercase tracking-widest text-xs">Novo Evento</span>
+              </button>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative w-full">
+        <AnimatePresence mode="wait">
+          {isInitialLoading ? (
+            <LoadingScreen key="loading" logo={settings.profile.logo} />
+          ) : !isAuthenticated ? (
+            <LoginView
+              key="login"
+              onLogin={(user) => {
+                setUserProfile(user);
+                setActiveTab('dashboard');
+                setIsInitialLoading(true);
+                setIsAuthenticated(true);
+                // Pequeno delay para exibir a experiência de transição premium
+                setTimeout(() => setIsInitialLoading(false), 2000);
+              }}
+              logo={settings.profile.logo}
+              companyName={settings.profile.name}
+            />
+          ) : (
+            <motion.div
+              key="app-content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              {/* Mobile Top Branding */}
+              <div className="lg:hidden bg-white/90 backdrop-blur-md border-b border-[#883545]/10 px-6 py-4 flex items-center justify-between z-30 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="size-11 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#883545]/5 overflow-hidden border border-[#883545]/10">
+                    {settings.profile.logo ? (
+                      <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+                    ) : (
+                      <div className="size-full bg-[#883545] flex items-center justify-center">
+                        <Heart className="text-white w-6 h-6" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <h2 className="text-xs font-black text-[#883545] uppercase tracking-tighter leading-tight">
+                      {settings.profile.name}
+                    </h2>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
+                      {settings.profile.description}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="size-9 bg-[#883545]/5 rounded-xl flex items-center justify-center text-[#883545] text-xs font-black border border-[#883545]/5 uppercase">
+                    {userProfile.name.split(' ').map((n: any) => n[0]).join('').slice(0, 2)}
+                  </div>
+                  <button
+                    onClick={() => { setIsAuthenticated(false); setActiveTab('dashboard'); }}
+                    className="p-2 text-slate-400 hover:text-[#883545] transition-colors"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div
+                ref={mainContentRef}
+                className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-hide"
+              >
+                <AnimatePresence mode="wait">
+                  {activeTab === 'dashboard' && (
+                    <DashboardView
+                      key="dash"
+                      stats={stats}
+                      payments={payments}
+                      brides={brides}
+                      onViewAll={() => setActiveTab('brides')}
+                      filterYear={filterYear}
+                      setFilterYear={setFilterYear}
+                      filterMonth={filterMonth}
+                      setFilterMonth={setFilterMonth}
+                      settings={settings}
+                      userProfile={userProfile}
+                    />
+                  )}
+                  {activeTab === 'brides' && (
+                    <BridesView
+                      key="brides"
+                      brides={brides}
+                      payments={payments}
+                      onEdit={(bride) => { setBrideToEdit(bride); setIsBrideModalOpen(true); }}
+                      onUpdateStatus={handleUpdateBrideStatus}
+                      onDelete={handleDeleteBride}
+                      settings={settings}
+                    />
+                  )}
+                  {activeTab === 'finance' && (
+                    <FinanceView
+                      key="finance"
+                      payments={payments}
+                      expenses={expenses}
+                      brides={brides}
+                      stats={stats}
+                      settings={settings}
+                      onAddPayment={handleAddPayment}
+                      onAddExpense={handleAddExpense}
+                    />
+                  )}
+                  {activeTab === 'settings' && (
+                    <SettingsView
+                      key="settings"
+                      settings={settings}
+                      setSettings={setSettings}
+                      data={{ brides, payments, expenses }}
+                      userProfile={userProfile}
+                      setUserProfile={setUserProfile}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Mobile Floating Action Button */}
+              {activeTab === 'brides' && (
+                <button
+                  onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                  className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
+                >
+                  <Plus className="w-8 h-8" />
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       <BrideModal
@@ -2398,7 +2839,7 @@ export default function App() {
         brideToEdit={brideToEdit}
         serviceTypes={settings.services}
       />
-      <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      {isAuthenticated && <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />}
     </div>
   );
 }
