@@ -5,7 +5,14 @@ import { Doughnut } from 'react-chartjs-2';
 
 Chart.register(ArcElement, Tooltip, Legend);
 
-export default function DoughnutChart({ labels, data, colors, title }) {
+interface DoughnutChartProps {
+  labels: string[];
+  data: number[];
+  colors: string[];
+  title?: string;
+}
+
+export default function DoughnutChart({ labels, data, colors, title }: DoughnutChartProps) {
   const chartData = {
     labels,
     datasets: [
@@ -18,7 +25,7 @@ export default function DoughnutChart({ labels, data, colors, title }) {
   };
   const options = {
     plugins: {
-      legend: { display: true, position: 'bottom' },
+      legend: { display: true, position: 'bottom' as const },
       title: title ? { display: true, text: title } : undefined,
     },
     cutout: '70%',
@@ -27,6 +34,7 @@ export default function DoughnutChart({ labels, data, colors, title }) {
   };
   return (
     <div style={{ width: '100%', height: 260 }}>
+      {/* @ts-ignore - react-chartjs-2 types can be tricky with chart.js 4 */}
       <Doughnut data={chartData} options={options} />
     </div>
   );

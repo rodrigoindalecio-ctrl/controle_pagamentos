@@ -36,7 +36,9 @@ import {
   ChevronDown,
   CheckCircle,
   XCircle,
-  UserMinus
+  UserMinus,
+  Award,
+  Trophy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -81,6 +83,7 @@ interface MonthlyStat {
 
 interface DashboardStats {
   activeBrides: number;
+  yearlyRevenue: number;
   activeBridesBreakdown?: {
     year2026: number;
     year2027: number;
@@ -122,6 +125,46 @@ interface DashboardStats {
   };
 }
 
+interface AppSettings {
+  profile: {
+    name: string;
+    logo: string;
+    description: string;
+  };
+  services: string[];
+  partners: string[];
+  goals: {
+    annualRevenue: number;
+    fineThresholdDays: number;
+    fineEarlyPercent: number;
+    fineLatePercent: number;
+  };
+  ui: {
+    darkMode: boolean;
+    compactMode: boolean;
+  };
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  profile: {
+    name: "WeddingAdviser",
+    logo: "",
+    description: "Gestão Premium"
+  },
+  services: ["Assessoria do Dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
+  partners: ["Papelaria Modelo", "Buffet X", "Uber", "Freelancer"],
+  goals: {
+    annualRevenue: 100000,
+    fineThresholdDays: 30,
+    fineEarlyPercent: 50,
+    fineLatePercent: 100
+  },
+  ui: {
+    darkMode: false,
+    compactMode: false
+  }
+};
+
 // Implementação mínima de StatCard
 const StatCard = ({ label, value, icon, color, trend, children }: any) => (
   <div className="bg-white p-4 rounded-xl shadow flex flex-col gap-2">
@@ -145,7 +188,8 @@ const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   </div>
 );
 
-const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, key?: string }) => {
+const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string }) => {
+  const currentYear = new Date().getFullYear();
   // --- Mapa de Ocupação de Agenda ---
   // --- Forecast de Faturamento Projetado ---
   const today = new Date();
@@ -212,9 +256,65 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     '#883545', '#F59E42', '#4F46E5', '#10B981', '#F43F5E', '#FACC15', '#6366F1', '#A21CAF', '#0EA5E9', '#F472B6', '#22D3EE', '#A3E635'
   ];
 
-  // Ghost Lines: comparativo de receita por mês para anos 2025, 2026, 2027, 2028
-  const ghostYears = ["2025", "2026", "2027", "2028"];
+  // --- Performance Reports: Serviço e Parceiro ---
+  // 1. Serviço mais vendido (Baseado no volume de contratos ativos/concluídos no período)
+  const serviceCounts = new Map();
+  contractsInPeriod.forEach(b => {
+    const type = b.service_type || 'Outro';
+    serviceCounts.set(type, (serviceCounts.get(type) || 0) + 1);
+  });
+  let bestSellingService = 'N/A';
+  let bestSellingCount = 0;
+  serviceCounts.forEach((count, type) => {
+    if (count > bestSellingCount) {
+      bestSellingCount = count;
+      bestSellingService = type;
+    }
+  });
+
+  // 2. Parceiro que mais gera BV (Baseado nos pagamentos da conta BV - ID 58)
+  const bvPayments = payments.filter(p =>
+    p.bride_id === 58 &&
+    (p.status || '').trim().toLowerCase() === 'pago'
+  );
+
+  // Filtrar payments pelo ano/mês se necessário (padrão é o ano inteiro se filterMonth for all)
+  const bvInPeriod = bvPayments.filter(p => {
+    const d = p.payment_date ? new Date(p.payment_date) : null;
+    if (!d) return false;
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    if (filterMonth === 'all') return String(year) === filterYear;
+    return String(year) === filterYear && String(month) === filterMonth;
+  });
+
+  const bvMap = new Map();
+  bvInPeriod.forEach(p => {
+    let partner = (p as any).partner_name;
+    if (!partner) {
+      partner = settings.partners.find(name => p.description?.includes(name)) || 'Outros';
+    }
+    bvMap.set(partner, (bvMap.get(partner) || 0) + (Number(p.amount_paid) || 0));
+  });
+
+  let topBVPartner = 'N/A';
+  let topBVAmount = 0;
+  bvMap.forEach((amount, partner) => {
+    if (amount > topBVAmount) {
+      topBVAmount = amount;
+      topBVPartner = partner;
+    }
+  });
+
+  const yearlyRevenueForFilter = payments.filter(p => {
+    const d = p.payment_date ? new Date(p.payment_date) : null;
+    return d && d.getFullYear() === Number(filterYear) && (p.status || '').trim().toLowerCase() === 'pago';
+  }).reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+  // Ghost Lines: comparativo de receita por mês para o ano atual + 2 anteriores
+  const ghostYears = [String(currentYear - 2), String(currentYear - 1), String(currentYear)];
   const ghostMonths = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+  const ghostColors = ["#6366F1", "#F59E42", "#883545"]; // Azul, Laranja, Vinho
   const ghostDatasets = ghostYears.map((year, idx) => {
     const data = ghostMonths.map((month, mIdx) => {
       const monthNum = mIdx + 1;
@@ -224,13 +324,13 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
           return d && d.getFullYear() === Number(year) && d.getMonth() + 1 === monthNum && (p.status || '').trim().toLowerCase() === 'pago';
         })
         .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
-      return total;
+      return total > 0 ? total : null;
     });
     return {
       label: year,
       data,
-      borderColor: ["#6366F1", "#883545", "#F59E42", "#10B981"][idx],
-      borderDash: idx === 0 ? [6, 4] : undefined,
+      borderColor: ghostColors[idx],
+      borderDash: year !== String(currentYear) ? [6, 4] : undefined,
       fill: false,
       pointRadius: 3,
       pointHoverRadius: 6,
@@ -248,6 +348,25 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
         {/* Period Filter Bar */}
         <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#883545]/10 shadow-sm">
+          {/* Goal Indicator (Desktop) */}
+          {filterMonth === 'all' && (
+            <div className="hidden lg:flex items-center gap-3 px-4 py-1.5 bg-slate-50 rounded-xl mr-2">
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Meta {filterYear}</span>
+                <span className="text-xs font-black text-[#883545]">R$ {settings.goals.annualRevenue.toLocaleString('pt-BR')}</span>
+              </div>
+              <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 transition-all duration-1000"
+                  style={{ width: `${Math.min(100, (yearlyRevenueForFilter / settings.goals.annualRevenue) * 100)}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-black text-emerald-600">
+                {((yearlyRevenueForFilter / settings.goals.annualRevenue) * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center gap-1 px-2 border-r border-slate-100">
             <Calendar className="size-4 text-[#883545]/40" />
             <select
@@ -255,10 +374,9 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
               onChange={(e) => setFilterYear(e.target.value)}
               className="bg-transparent text-xs font-black uppercase tracking-widest border-none focus:ring-0 cursor-pointer text-slate-700"
             >
+              <option value="2024">2024</option>
               <option value="2025">2025</option>
               <option value="2026">2026</option>
-              <option value="2027">2027</option>
-              <option value="2028">2028</option>
             </select>
           </div>
           <div className="flex items-center gap-1 px-2">
@@ -339,6 +457,17 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
           <StatCard label="Ticket Médio" value={`R$ ${stats.ticketMedio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={CircleDollarSign} color="text-indigo-500" />
           <StatCard label="Eficiência Lucro" value={stats.efficiency} icon={Heart} color="text-pink-500" />
           <StatCard label="Crescimento YoY" value={stats.growthYoY} icon={TrendingUp} color="text-blue-500" />
+          <StatCard label="Serviço +Vendido" value={bestSellingService} icon={Award} color="text-amber-500" />
+          <StatCard
+            label="Melhor Parceiro BV"
+            value={topBVPartner}
+            icon={Trophy}
+            color="text-[#883545]"
+          >
+            <div className="text-[10px] font-bold text-[#883545]/60 mt-0.5">
+              R$ {topBVAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} gerados
+            </div>
+          </StatCard>
           <StatCard label="Média Mensal" value={`R$ ${((stats.chartData && stats.chartData.length > 0) ? Math.round(stats.chartData.reduce((sum, d) => sum + d.revenue, 0) / stats.chartData.length) : 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={Calendar} color="text-slate-600" />
           <StatCard
             label="Cancelamentos"
@@ -434,7 +563,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         </div>
 
         {/* Ghost Lines Chart: Comparativo de anos */}
-        <div className="lg:col-span-3 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+        <div className="lg:col-span-3 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
           <h3 className="text-lg lg:text-xl font-bold mb-4">Comparativo de Receita por Ano</h3>
           <GhostLinesChart
             labels={ghostMonths}
@@ -500,7 +629,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
 // --- Brides View ---
 
-const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments }: { isOpen: boolean, onClose: () => void, onConfirm: (fine: number) => void, bride: Bride | null, payments: Payment[] }) => {
+const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments, goals }: { isOpen: boolean, onClose: () => void, onConfirm: (fine: number) => void, bride: Bride | null, payments: Payment[], goals: AppSettings['goals'] }) => {
   const [fine, setFine] = useState(0);
 
   useEffect(() => {
@@ -509,10 +638,11 @@ const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments }: { isOpen
       const today = new Date();
       const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-      const suggestedPercent = diffDays > 30 ? 0.5 : 1.0;
-      setFine(bride.contract_value * suggestedPercent);
+      // Lógica de multa dinâmica baseada nos dias restantes
+      const percent = diffDays > goals.fineThresholdDays ? goals.fineEarlyPercent : goals.fineLatePercent;
+      setFine(bride.contract_value * (percent / 100));
     }
-  }, [bride, isOpen]);
+  }, [bride, isOpen, goals]);
 
   if (!bride) return null;
 
@@ -583,7 +713,7 @@ const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments }: { isOpen
   );
 };
 
-const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, key?: string }) => {
+const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, key?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [yearFilter, setYearFilter] = useState('Todos');
@@ -798,7 +928,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
           filteredBrides.map((bride) => {
             const { totalPaid, balance } = calculateBalance(bride);
             return (
-              <div key={bride.id} className="bg-white p-5 rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative overflow-hidden group">
+              <div key={bride.id} className={`${settings.ui.compactMode ? 'p-3' : 'p-5'} bg-white rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative overflow-hidden group`}>
                 <div className={`absolute top-0 right-0 w-1.5 h-full ${bride.status === 'Ativa' ? 'bg-emerald-500' : bride.status === 'Concluído' ? 'bg-blue-400' : bride.status === 'Inativa' ? 'bg-slate-300' : 'bg-rose-500'}`} />
 
                 <div className="flex justify-between items-start pr-4">
@@ -912,23 +1042,23 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                 filteredBrides.map((bride) => {
                   const { totalPaid, balance } = calculateBalance(bride);
                   return (
-                    <tr key={bride.id} className="hover:bg-[#883545]/5 transition-colors group">
-                      <td className="px-4 lg:px-6 py-4">
+                    <tr key={bride.id} className={`${settings.ui.compactMode ? 'hover:bg-[#883545]/5' : 'hover:bg-[#883545]/5'} transition-colors group`}>
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
                         <div className="flex flex-col">
-                          <span className="text-sm font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors">{bride.name}</span>
-                          <span className="text-[10px] lg:text-xs text-slate-500">{bride.email}</span>
+                          <span className={`${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors`}>{bride.name}</span>
+                          <span className="text-[10px] text-slate-500">{bride.email}</span>
                         </div>
                       </td>
-                      <td className="px-4 lg:px-6 py-4">
-                        <div className="flex items-center gap-2 text-slate-700 text-xs lg:text-sm">
-                          <Calendar className="w-4 h-4 text-slate-400" />
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
+                        <div className="flex items-center gap-2 text-slate-700 text-xs">
+                          <Calendar className={`${settings.ui.compactMode ? 'w-3 h-3' : 'w-4 h-4'} text-slate-400`} />
                           {bride.event_date && new Date(bride.event_date).toLocaleDateString('pt-BR')}
                         </div>
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-xs font-bold text-slate-600">
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-slate-600`}>
                         {bride.service_type || 'Não definido'}
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-xs lg:text-sm font-black text-slate-700">
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-slate-700`}>
                         {bride.status === 'Cancelado' && bride.original_value > 0 ? (
                           <div className="flex flex-col">
                             <span className="text-rose-600">Multa: R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -938,13 +1068,13 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
                           <>R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
                         )}
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-xs lg:text-sm font-bold text-emerald-600">
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-emerald-600`}>
                         R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-xs lg:text-sm font-black text-[#883545]">
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-[#883545]`}>
                         R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 lg:px-6 py-4">
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] lg:text-xs font-bold ${bride.status === 'Ativa' ? 'bg-emerald-100 text-emerald-700' :
                           bride.status === 'Concluído' ? 'bg-blue-100 text-blue-700' :
                             bride.status === 'Inativa' ? 'bg-slate-100 text-slate-700' :
@@ -1002,6 +1132,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
         onClose={() => setIsDistratoModalOpen(false)}
         bride={brideForDistrato}
         payments={payments}
+        goals={settings.goals}
         onConfirm={(fine) => {
           if (brideForDistrato) {
             onUpdateStatus(brideForDistrato.id, 'Cancelado', {
@@ -1018,13 +1149,14 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
 
 // --- Finance View ---
 
-const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
+const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   // Filtros para lançamentos recentes
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Todos');
+  const [partnerFilter, setPartnerFilter] = useState('Todos');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   // Filtragem dos lançamentos recentes
   const allItems = [
@@ -1037,6 +1169,10 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
       const searchMatch = item.bride_name.toLowerCase().includes(searchTerm.toLowerCase()) || (item.description || '').toLowerCase().includes(searchTerm.toLowerCase());
       // Filtro de tipo
       const typeMatch = typeFilter === 'Todos' || (typeFilter === 'Receita' && !item.isExpense) || (typeFilter === 'Despesa' && item.isExpense);
+      // Filtro de parceiro (apenas para BV ou despesas que tenham parceiro na descrição)
+      const partnerMatch = partnerFilter === 'Todos' ||
+        item.description?.toLowerCase().includes(partnerFilter.toLowerCase()) ||
+        (item as any).partner_name === partnerFilter;
       // Filtro de data
       let dateMatch = true;
       const itemDate = new Date(item.payment_date);
@@ -1121,6 +1257,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
             isOpen={isFinanceModalOpen}
             onClose={() => setIsFinanceModalOpen(false)}
             brides={brides}
+            partners={settings.partners}
             onAddPayment={onAddPayment}
             onAddExpense={onAddExpense}
           />
@@ -1173,31 +1310,26 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                       <option>Hoje</option>
                       <option>Últimos 7 dias</option>
                       <option>Últimos 30 dias</option>
-                      <option>Personalizado</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                  {dateFilter === 'Personalizado' && (
-                    <div className="flex gap-2 mt-2">
-                      <input
-                        type="date"
-                        value={customStart}
-                        onChange={e => setCustomStart(e.target.value)}
-                        className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-[#883545]/20"
-                        placeholder="Data inicial"
-                      />
-                      <input
-                        type="date"
-                        value={customEnd}
-                        onChange={e => setCustomEnd(e.target.value)}
-                        className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-[#883545]/20"
-                        placeholder="Data final"
-                      />
-                    </div>
-                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={partnerFilter}
+                      onChange={(e) => setPartnerFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      {settings.partners.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
                 <button
-                  onClick={() => { setSearchTerm(''); setTypeFilter('Todos'); setDateFilter('Todos'); }}
+                  onClick={() => { setSearchTerm(''); setTypeFilter('Todos'); setDateFilter('Todos'); setPartnerFilter('Todos'); }}
                   className="w-full p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
                   title="Limpar Filtros"
                 >
@@ -1230,7 +1362,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                 <div className="px-6 py-12 text-center text-slate-400 italic font-medium">Nenhum lançamento encontrado com os filtros aplicados.</div>
               ) : (
                 filteredItems.map((item: any) => (
-                  <div key={item.id + (item.isExpense ? '-exp' : '-pay')} className="p-4 rounded-xl bg-slate-50 border border-[#883545]/5 space-y-3 relative overflow-hidden">
+                  <div key={item.id + (item.isExpense ? '-exp' : '-pay')} className={`${settings.ui.compactMode ? 'p-3' : 'p-4'} rounded-xl bg-slate-50 border border-[#883545]/5 space-y-3 relative overflow-hidden`}>
                     <div className={`absolute top-0 left-0 w-1 h-full ${item.isExpense ? 'bg-rose-500' : (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     <div className="flex justify-between items-start">
                       <div>
@@ -1276,17 +1408,17 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                   ) : (
                     filteredItems.map((item: any) => (
                       <tr key={item.id + (item.isExpense ? '-exp' : '-pay')} className="hover:bg-[#883545]/5 transition-colors group">
-                        <td className="px-6 py-4">
-                          <p className="text-sm font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors">{item.bride_name}</p>
+                        <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'}`}>
+                          <p className={`${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors`}>{item.bride_name}</p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase">{item.description}</p>
                         </td>
-                        <td className="px-6 py-4 text-xs font-medium text-slate-600">
+                        <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'} text-xs font-medium text-slate-600`}>
                           {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
                         </td>
-                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'} ${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
                           {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'}`}>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.isExpense ? 'bg-rose-100 text-rose-700' :
                             (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
                               'bg-amber-100 text-amber-700'
@@ -1307,7 +1439,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
   );
 };
 
-const FinanceModal = ({ isOpen, onClose, brides, onAddPayment, onAddExpense }: { isOpen: boolean, onClose: () => void, brides: Bride[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void }) => {
+const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void }) => {
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
@@ -1448,14 +1580,16 @@ const FinanceModal = ({ isOpen, onClose, brides, onAddPayment, onAddExpense }: {
               ) : (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro / Fornecedor</label>
-                  <input
+                  <select
                     required
-                    type="text"
-                    placeholder="Ex: Papelaria Modelo, Buffet X"
                     value={formData.partner_name}
                     onChange={(e) => setFormData({ ...formData, partner_name: e.target.value })}
                     className="w-full rounded-xl border-none bg-emerald-50/30 text-sm p-4 focus:ring-2 focus:ring-emerald-500/20 font-bold shadow-inner"
-                  />
+                  >
+                    <option value="">Selecione um parceiro...</option>
+                    {partners.map(p => <option key={p} value={p}>{p}</option>)}
+                    <option value="custom">+ Outro (Digitar na descrição)</option>
+                  </select>
                 </div>
               )
             )}
@@ -1520,24 +1654,345 @@ const FinanceModal = ({ isOpen, onClose, brides, onAddPayment, onAddExpense }: {
   );
 };
 
-const SettingsView = ({ key }: { key?: string }) => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.98 }}
-    animate={{ opacity: 1, scale: 1 }}
-    className="space-y-6 pb-20 lg:pb-0"
-  >
-    <Header title="Configurações" subtitle="Gerencie as preferências da sua conta e do sistema." />
-    <div className="bg-white p-6 lg:p-10 rounded-2xl border border-[#883545]/10 shadow-sm flex flex-col items-center justify-center min-h-[300px] text-center">
-      <div className="size-20 bg-[#883545]/5 rounded-full flex items-center justify-center text-[#883545] mb-4">
-        <Settings className="w-10 h-10 opacity-40" />
-      </div>
-      <h3 className="text-xl font-bold text-slate-800 mb-2">Em Breve</h3>
-      <p className="text-slate-500 max-w-xs">Estamos preparando as melhores opções de personalização para você.</p>
-    </div>
-  </motion.div>
-);
+const SettingsView = ({ settings, setSettings, data }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, key?: string }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
 
-const BrideModal = ({ isOpen, onClose, onSave, brideToEdit }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null }) => {
+  const handleExport = () => {
+    const backup = {
+      settings,
+      data,
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wedding_adviser_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const addItem = (list: 'services' | 'partners', value: string) => {
+    if (!value) return;
+    setSettings({ ...settings, [list]: [...settings[list], value] });
+  };
+
+  const removeItem = (list: 'services' | 'partners', index: number) => {
+    const newList = [...settings[list]];
+    newList.splice(index, 1);
+    setSettings({ ...settings, [list]: newList });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="space-y-6 pb-20 lg:pb-0"
+    >
+      <Header title="Configurações" subtitle="Gerencie as preferências da sua conta e do sistema." />
+
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Settings Navigation */}
+        <div className="lg:w-64 space-y-2">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'profile' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
+          >
+            <Users className="w-5 h-5" /> Perfil
+          </button>
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'services' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
+          >
+            <Plus className="w-5 h-5" /> Serviços & Parceiros
+          </button>
+          <button
+            onClick={() => setActiveTab('goals')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'goals' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
+          >
+            <TrendingUp className="w-5 h-5" /> Metas & Regras
+          </button>
+          <button
+            onClick={() => setActiveTab('system')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'system' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
+          >
+            <Settings className="w-5 h-5" /> Sistema
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 bg-white p-6 lg:p-10 rounded-3xl border border-[#883545]/10 shadow-sm min-h-[500px]">
+          {activeTab === 'profile' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Perfil da Assessoria</h3>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('wedding_settings', JSON.stringify(settings));
+                    alert('Configurações de perfil salvas com sucesso! ✓');
+                  }}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all"
+                >
+                  Salvar Perfil
+                </button>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 flex items-center gap-6">
+                <div className="size-20 bg-white rounded-2xl shadow-inner border border-slate-100 flex items-center justify-center overflow-hidden relative group">
+                  {settings.profile.logo ? (
+                    <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <Heart className="w-8 h-8 text-slate-200" />
+                  )}
+                  <label className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                    <Plus className="w-5 h-5" />
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setSettings({ ...settings, profile: { ...settings.profile, logo: reader.result as string } });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-700">Logo da Assessoria</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Recomendado: PNG ou JPG (quadrado)</p>
+                  {settings.profile.logo && (
+                    <button
+                      onClick={() => setSettings({ ...settings, profile: { ...settings.profile, logo: '' } })}
+                      className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mt-2 hover:underline"
+                    >
+                      Remover Logo
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome da Assessoria</label>
+                  <input
+                    type="text"
+                    value={settings.profile.name}
+                    onChange={e => setSettings({ ...settings, profile: { ...settings.profile, name: e.target.value } })}
+                    className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Slogan / Descrição Curta</label>
+                  <input
+                    type="text"
+                    value={settings.profile.description}
+                    onChange={e => setSettings({ ...settings, profile: { ...settings.profile, description: e.target.value } })}
+                    className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'services' && (
+            <div className="space-y-10">
+              <section className="space-y-4">
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <span className="p-1.5 bg-[#883545]/10 rounded-lg text-[#883545]">
+                    <Plus className="w-4 h-4" />
+                  </span>
+                  Serviços Oferecidos
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    id="new-service"
+                    type="text"
+                    placeholder="Ex: Cerimonial Completo"
+                    className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        addItem('services', (e.target as HTMLInputElement).value);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('new-service') as HTMLInputElement;
+                      addItem('services', input.value);
+                      input.value = '';
+                    }}
+                    className="px-6 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {settings.services.map((service, idx) => (
+                    <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-full text-xs font-bold border border-slate-200">
+                      {service}
+                      <button onClick={() => removeItem('services', idx)} className="hover:text-rose-500 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-100 rounded-lg text-emerald-600">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  Parceiros Recorrentes (BV)
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    id="new-partner"
+                    type="text"
+                    placeholder="Ex: Floricultura Modelo"
+                    className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        addItem('partners', (e.target as HTMLInputElement).value);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('new-partner') as HTMLInputElement;
+                      addItem('partners', input.value);
+                      input.value = '';
+                    }}
+                    className="px-6 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {settings.partners.map((partner, idx) => (
+                    <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
+                      {partner}
+                      <button onClick={() => removeItem('partners', idx)} className="hover:text-rose-500 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'goals' && (
+            <div className="space-y-8">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Metas & Regras Financeiras</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Meta de Faturamento Anual (R$)</label>
+                  <div className="relative">
+                    <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#883545]" />
+                    <input
+                      type="number"
+                      value={settings.goals.annualRevenue}
+                      onChange={e => setSettings({ ...settings, goals: { ...settings.goals, annualRevenue: Number(e.target.value) } })}
+                      className="w-full pl-11 pr-4 py-4 bg-slate-50 border-none rounded-2xl text-sm font-black shadow-inner"
+                    />
+                  </div>
+                </div>
+                {/* Removido Multa Geral Padrão pois a Regra de Escalonamento já cobre tudo */}
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 space-y-4">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Regra de Escalonamento (Sugestão Inteligente)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prazo Crítico (Dias)</label>
+                    <input
+                      type="number"
+                      value={settings.goals.fineThresholdDays}
+                      onChange={e => setSettings({ ...settings, goals: { ...settings.goals, fineThresholdDays: Number(e.target.value) } })}
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-black shadow-inner"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">% Longe do Evento</label>
+                    <input
+                      type="number"
+                      value={settings.goals.fineEarlyPercent}
+                      onChange={e => setSettings({ ...settings, goals: { ...settings.goals, fineEarlyPercent: Number(e.target.value) } })}
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-black shadow-inner"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">% Próximo ao Evento</label>
+                    <input
+                      type="number"
+                      value={settings.goals.fineLatePercent}
+                      onChange={e => setSettings({ ...settings, goals: { ...settings.goals, fineLatePercent: Number(e.target.value) } })}
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-black shadow-inner"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] font-medium text-slate-400 italic">
+                  * Atualmente: {settings.goals.fineEarlyPercent}% se faltar mais de {settings.goals.fineThresholdDays} dias, senão {settings.goals.fineLatePercent}%.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'system' && (
+            <div className="space-y-10">
+              <section className="space-y-6">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Preferências do Sistema</h3>
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <LayoutDashboard className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-700">Modo Compacto</p>
+                      <p className="text-[10px] font-bold text-slate-400">Ver mais dados na mesma visualização</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, ui: { ...settings.ui, compactMode: !settings.ui.compactMode } })}
+                    className={`w-12 h-6 rounded-full transition-all relative ${settings.ui.compactMode ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.ui.compactMode ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-6 pt-6 border-t border-slate-100">
+                <h3 className="text-lg font-black text-rose-800 uppercase tracking-widest">Backup & Segurança</h3>
+                <div className="bg-rose-50 p-6 rounded-2xl border border-rose-100 space-y-4">
+                  <p className="text-xs font-bold text-rose-900/60 leading-relaxed">
+                    Exporte todos os seus dados (clientes, pagamentos, despesas e configurações) para um arquivo JSON. Recomendamos fazer um backup externo uma vez por mês.
+                  </p>
+                  <button
+                    onClick={handleExport}
+                    className="w-full flex items-center justify-center gap-3 py-4 bg-white text-rose-700 border border-rose-200 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-100 transition-all"
+                  >
+                    <LogOut className="w-4 h-4 rotate-90" /> Exportar Todos os Dados
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null, serviceTypes: string[] }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -1628,12 +2083,15 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit }: { isOpen: boolean,
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de Serviço</label>
-                <input
-                  placeholder="Assessoria do Dia..."
+                <select
+                  required
                   className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
                   value={formData.service_type}
                   onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
-                />
+                >
+                  <option value="">Selecione o serviço...</option>
+                  {serviceTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1681,6 +2139,16 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
+
+  // Settings State
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem('wedding_settings');
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('wedding_settings', JSON.stringify(settings));
+  }, [settings]);
 
   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
   const [filterMonth, setFilterMonth] = useState((new Date().getMonth() + 1).toString());
@@ -1786,12 +2254,22 @@ export default function App() {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-72 bg-white border-r border-[#883545]/10 flex-col p-6 shadow-2xl shadow-[#883545]/5 z-20">
         <div className="flex items-center gap-3 mb-10 px-2 group cursor-pointer">
-          <div className="size-12 bg-[#883545] rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-[#883545]/30 group-hover:rotate-6 transition-transform">
-            <Heart className="text-white w-7 h-7" />
+          <div className="size-12 bg-white rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-[#883545]/10 group-hover:rotate-6 transition-transform overflow-hidden border border-[#883545]/5">
+            {settings.profile.logo ? (
+              <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+            ) : (
+              <div className="size-full bg-[#883545] flex items-center justify-center">
+                <Heart className="text-white w-7 h-7" />
+              </div>
+            )}
           </div>
-          <div>
-            <h1 className="text-xl font-black text-[#883545] tracking-tight leading-none uppercase">WeddingAdviser</h1>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Gestão Premium</span>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm lg:text-base font-black text-[#883545] tracking-tight leading-tight uppercase">
+              {settings.profile.name}
+            </h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight mt-1">
+              {settings.profile.description}
+            </p>
           </div>
         </div>
 
@@ -1827,6 +2305,31 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {/* Mobile Top Branding */}
+        <div className="lg:hidden bg-white/90 backdrop-blur-md border-b border-[#883545]/10 px-6 py-4 flex items-center justify-between z-30 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="size-11 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#883545]/5 overflow-hidden border border-[#883545]/10">
+              {settings.profile.logo ? (
+                <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+              ) : (
+                <div className="size-full bg-[#883545] flex items-center justify-center">
+                  <Heart className="text-white w-6 h-6" />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col">
+              <h2 className="text-xs font-black text-[#883545] uppercase tracking-tighter leading-tight">
+                {settings.profile.name}
+              </h2>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
+                {settings.profile.description}
+              </span>
+            </div>
+          </div>
+          <div className="size-9 bg-[#883545]/5 rounded-xl flex items-center justify-center text-[#883545] text-xs font-black border border-[#883545]/5">
+            RS
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-hide">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -1840,6 +2343,7 @@ export default function App() {
                 setFilterYear={setFilterYear}
                 filterMonth={filterMonth}
                 setFilterMonth={setFilterMonth}
+                settings={settings}
               />
             )}
             {activeTab === 'brides' && (
@@ -1850,6 +2354,7 @@ export default function App() {
                 onEdit={(bride) => { setBrideToEdit(bride); setIsBrideModalOpen(true); }}
                 onUpdateStatus={handleUpdateBrideStatus}
                 onDelete={handleDeleteBride}
+                settings={settings}
               />
             )}
             {activeTab === 'finance' && (
@@ -1859,12 +2364,18 @@ export default function App() {
                 expenses={expenses}
                 brides={brides}
                 stats={stats}
+                settings={settings}
                 onAddPayment={handleAddPayment}
                 onAddExpense={handleAddExpense}
               />
             )}
             {activeTab === 'settings' && (
-              <SettingsView key="settings" />
+              <SettingsView
+                key="settings"
+                settings={settings}
+                setSettings={setSettings}
+                data={{ brides, payments, expenses }}
+              />
             )}
           </AnimatePresence>
         </div>
@@ -1885,6 +2396,7 @@ export default function App() {
         onClose={() => { setIsBrideModalOpen(false); setBrideToEdit(null); }}
         onSave={handleSaveBride}
         brideToEdit={brideToEdit}
+        serviceTypes={settings.services}
       />
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
