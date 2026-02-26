@@ -146,19 +146,19 @@ const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
 );
 
 const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, key?: string }) => {
-    // --- Mapa de Ocupação de Agenda ---
-      // --- Forecast de Faturamento Projetado ---
-      const today = new Date();
-      const forecastContratos = brides.filter(b => {
-        if (!b.event_date) return false;
-        const eventDate = new Date(b.event_date);
-        return eventDate > today && (b.status === 'Ativa' || b.status === 'Concluído');
-      });
-      const forecastValor = forecastContratos.reduce((sum, b) => sum + (b.contract_value || 0), 0);
-    const anosAgenda = ['2026', '2027', '2028'];
-    const eventosPorAno = anosAgenda.map(ano =>
-      brides.filter(b => b.event_date && b.event_date.startsWith(ano) && (b.status === 'Ativa' || b.status === 'Concluído')).length
-    );
+  // --- Mapa de Ocupação de Agenda ---
+  // --- Forecast de Faturamento Projetado ---
+  const today = new Date();
+  const forecastContratos = brides.filter(b => {
+    if (!b.event_date) return false;
+    const eventDate = new Date(b.event_date);
+    return eventDate > today && (b.status === 'Ativa' || b.status === 'Concluído');
+  });
+  const forecastValor = forecastContratos.reduce((sum, b) => sum + (b.contract_value || 0), 0);
+  const anosAgenda = ['2026', '2027', '2028'];
+  const eventosPorAno = anosAgenda.map(ano =>
+    brides.filter(b => b.event_date && b.event_date.startsWith(ano) && (b.status === 'Ativa' || b.status === 'Concluído')).length
+  );
   if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
 
   const maxVal = Math.max(...(stats.chartData?.map(d => Math.max(d.revenue, d.expenses)) || [1]), 1);
@@ -181,15 +181,15 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   const periodLabel = filterMonth === 'all' ? `Ano ${filterYear}` : `${months.find(m => m.value === filterMonth)?.label} ${filterYear}`;
 
   // --- Revenue Mix (Rosca) ---
-    // --- Conversão de Novos Contratos ---
-    const novosContratos = brides.filter(b => {
-      if (!b.created_at) return false;
-      const created = new Date(b.created_at);
-      const year = created.getFullYear();
-      const month = created.getMonth() + 1;
-      if (filterMonth === 'all') return String(year) === filterYear;
-      return String(year) === filterYear && String(month) === filterMonth;
-    }).length;
+  // --- Conversão de Novos Contratos ---
+  const novosContratos = brides.filter(b => {
+    if (!b.created_at) return false;
+    const created = new Date(b.created_at);
+    const year = created.getFullYear();
+    const month = created.getMonth() + 1;
+    if (filterMonth === 'all') return String(year) === filterYear;
+    return String(year) === filterYear && String(month) === filterMonth;
+  }).length;
   // Agrupa contratos ativos/concluídos do período por tipo de serviço
   const contractsInPeriod = brides.filter(b => {
     if (!b.service_type) return false;
@@ -363,16 +363,16 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                {/* Gráfico Mapa de Ocupação de Agenda */}
-                <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
-                  <h3 className="text-lg lg:text-xl font-bold mb-4">Ocupação de Agenda</h3>
-                  <OcupacaoAgendaBarChart
-                    labels={anosAgenda}
-                    values={eventosPorAno}
-                    color="#883545"
-                    title="Eventos Fechados por Ano"
-                  />
-                </div>
+        {/* Gráfico Mapa de Ocupação de Agenda */}
+        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
+          <h3 className="text-lg lg:text-xl font-bold mb-4">Ocupação de Agenda</h3>
+          <OcupacaoAgendaBarChart
+            labels={anosAgenda}
+            values={eventosPorAno}
+            color="#883545"
+            title="Eventos Fechados por Ano"
+          />
+        </div>
         {/* Gráfico de Rosca: Mix de Receita por Serviço */}
         <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
           <h3 className="text-lg lg:text-xl font-bold mb-4">Mix de Receita por Serviço</h3>
@@ -1019,8 +1019,8 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete }: { br
 // --- Finance View ---
 
 const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
-    const [customStart, setCustomStart] = useState('');
-    const [customEnd, setCustomEnd] = useState('');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   // Filtros para lançamentos recentes
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('Todos');
@@ -1064,53 +1064,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
     })
     .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
     .slice(0, 30);
-  const [type, setType] = useState<'entrada' | 'saida'>('entrada');
-  const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
-  const [formData, setFormData] = useState({
-    bride_id: '',
-    description: '',
-    partner_name: '',
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    status: 'Pago',
-    category: 'Geral'
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (type === 'entrada') {
-      const isBV = revenueSegment === 'bv';
-      const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
-      const isCancellation = selectedBride?.status === 'Cancelado';
-
-      onAddPayment({
-        bride_id: isBV ? 58 : formData.bride_id,
-        description: isBV
-          ? `[BV] ${formData.partner_name} - ${formData.description}`
-          : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
-        amount_paid: Number(formData.amount),
-        payment_date: formData.date,
-        status: 'Pago'
-      });
-    } else {
-      onAddExpense({
-        description: formData.description,
-        amount: Number(formData.amount),
-        date: formData.date,
-        category: formData.category
-      });
-    }
-    setFormData({
-      bride_id: '',
-      description: '',
-      partner_name: '',
-      amount: '',
-      date: new Date().toISOString().split('T')[0],
-      status: 'Pago',
-      category: 'Geral'
-    });
-    setRevenueSegment('assessoria');
-  };
+  const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
 
@@ -1143,16 +1097,36 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
       animate={{ opacity: 1, scale: 1 }}
       className="space-y-6 pb-20 lg:pb-0"
     >
-      <Header title="Gestão Financeira" subtitle="Controle total de entradas e despesas da sua assessoria de casamentos." />
-      {/* Filtros colapsados para lançamentos recentes (mobile) */}
-      <div className="flex justify-end mb-4">
-        <button
-          className="px-4 py-2 bg-[#883545] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-[#883545]/90 transition-all"
-          onClick={() => setIsFilterModalOpen(true)}
-        >
-          <Filter className="w-5 h-5" /> Filtrar
-        </button>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+        <Header title="Gestão Financeira" subtitle="Controle total de entradas e despesas da sua assessoria de casamentos." />
+        <div className="flex items-center gap-3">
+          <button
+            className="flex-1 lg:flex-none px-6 py-3.5 bg-white text-[#883545] border border-[#883545]/20 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            onClick={() => setIsFinanceModalOpen(true)}
+          >
+            <Plus className="w-5 h-5" /> Novo Lançamento
+          </button>
+          <button
+            className="px-6 py-3.5 bg-[#883545] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#883545]/20 hover:bg-[#883545]/90 transition-all active:scale-95"
+            onClick={() => setIsFilterModalOpen(true)}
+          >
+            <Filter className="w-5 h-5" /> Filtrar
+          </button>
+        </div>
       </div>
+
+      <AnimatePresence>
+        {isFinanceModalOpen && (
+          <FinanceModal
+            isOpen={isFinanceModalOpen}
+            onClose={() => setIsFinanceModalOpen(false)}
+            brides={brides}
+            onAddPayment={onAddPayment}
+            onAddExpense={onAddExpense}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {isFilterModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -1241,145 +1215,8 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-        <div className="lg:col-span-1">
-          <div className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border border-[#883545]/10">
-            <div className="flex gap-2 mb-6 p-1 bg-slate-50 rounded-xl border border-[#883545]/5">
-              <button
-                onClick={() => setType('entrada')}
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${type === 'entrada' ? 'bg-[#883545] text-white shadow-md' : 'text-slate-400 hover:text-[#883545]'}`}
-              >
-                Receita (+)
-              </button>
-              <button
-                onClick={() => setType('saida')}
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${type === 'saida' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-rose-500'}`}
-              >
-                Despesa (-)
-              </button>
-            </div>
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <Plus className={`w-5 h-5 ${type === 'entrada' ? 'text-[#883545]' : 'text-rose-500'}`} />
-              {type === 'entrada' ? 'Registrar Parcela' : 'Lançar Despesa'}
-            </h3>
-
-            {type === 'entrada' && (
-              <div className="flex gap-2 mb-6 p-1 bg-white rounded-xl border border-[#883545]/10">
-                <button
-                  type="button"
-                  onClick={() => setRevenueSegment('assessoria')}
-                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'assessoria' ? 'bg-slate-100 text-[#883545]' : 'text-slate-400'}`}
-                >
-                  Assessoria
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRevenueSegment('bv')}
-                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'bv' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400'}`}
-                >
-                  Bonificação (BV)
-                </button>
-              </div>
-            )}
-            <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-5">
-              {type === 'entrada' && (
-                revenueSegment === 'assessoria' ? (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente</label>
-                    <select
-                      required
-                      value={formData.bride_id}
-                      onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
-                      className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium transition-all"
-                    >
-                      <option value="">Selecione um cliente...</option>
-                      {brides
-                        .filter(b => {
-                          if (b.id === 58) return false;
-                          if (b.status === 'Ativa') return true;
-                          if (b.status === 'Cancelado' && b.balance >= 1) return true;
-                          return false;
-                        })
-                        .map(b => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} {b.status === 'Cancelado' ? '(Cancelado/Multa)' : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Parceiro / Fornecedor</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Ex: Papelaria Modelo, Buffet X"
-                      value={formData.partner_name}
-                      onChange={(e) => setFormData({ ...formData, partner_name: e.target.value })}
-                      className="w-full rounded-lg border-[#883545]/20 bg-emerald-50/30 text-sm p-2.5 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
-                    />
-                  </div>
-                )
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</label>
-                <input
-                  required
-                  type="text"
-                  placeholder={type === 'entrada' ? "Ex: Parcela 02/10" : "Ex: Uber para evento"}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Data {type === 'entrada' ? 'do Pagamento' : 'da Despesa'}</label>
-                  <input
-                    required
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Valor (R$)</label>
-                  <input
-                    required
-                    type="number"
-                    step="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    placeholder="0,00"
-                    className={`w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-bold ${type === 'entrada' ? 'text-emerald-600' : 'text-rose-600'}`}
-                  />
-                </div>
-              </div>
-              {type === 'saida' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-widest">Categoria</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full rounded-lg border-[#883545]/20 bg-slate-50 text-sm p-2.5 focus:ring-[#883545] focus:border-[#883545] font-medium"
-                  >
-                    <option value="Uber">Uber / Transporte</option>
-                    <option value="Alimentação">Alimentação</option>
-                    <option value="Marketing">Marketing / Tráfego</option>
-                    <option value="Equipe">Equipe / Freelance</option>
-                    <option value="Outros">Outros</option>
-                  </select>
-                </div>
-              )}
-              <button type="submit" className={`mt-4 w-full h-11 lg:h-12 text-white font-black rounded-xl shadow-lg transition-all text-xs uppercase tracking-widest ${type === 'entrada' ? 'bg-[#883545] shadow-[#883545]/20' : 'bg-rose-500 shadow-rose-500/20'}`}>
-                {type === 'entrada' ? 'LANÇAR RECEITA' : 'REGISTRAR DESPESA'}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:gap-8">
+        <div className="w-full">
           <div className="bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden min-h-[400px]">
             <div className="p-4 lg:p-6 border-b border-[#883545]/5 flex justify-between items-center bg-[#883545]/5">
               <h3 className="font-bold text-slate-800">Lançamentos Recentes</h3>
@@ -1446,7 +1283,7 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
                         <td className="px-6 py-4 text-xs font-medium text-slate-600">
                           {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
                         </td>
-                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}> 
+                        <td className={`px-6 py-4 text-sm font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
                           {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-6 py-4">
@@ -1467,6 +1304,219 @@ const FinanceView = ({ payments, expenses, brides, stats, onAddPayment, onAddExp
         </div>
       </div>
     </motion.div>
+  );
+};
+
+const FinanceModal = ({ isOpen, onClose, brides, onAddPayment, onAddExpense }: { isOpen: boolean, onClose: () => void, brides: Bride[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void }) => {
+  const [type, setType] = useState<'entrada' | 'saida'>('entrada');
+  const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
+  const [formData, setFormData] = useState({
+    bride_id: '',
+    description: '',
+    partner_name: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    status: 'Pago',
+    category: 'Geral'
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (type === 'entrada') {
+      const isBV = revenueSegment === 'bv';
+      const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
+      const isCancellation = selectedBride?.status === 'Cancelado';
+
+      onAddPayment({
+        bride_id: isBV ? 58 : formData.bride_id,
+        description: isBV
+          ? `[BV] ${formData.partner_name} - ${formData.description}`
+          : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
+        amount_paid: Number(formData.amount),
+        payment_date: formData.date,
+        status: 'Pago'
+      });
+    } else {
+      onAddExpense({
+        description: formData.description,
+        amount: Number(formData.amount),
+        date: formData.date,
+        category: formData.category
+      });
+    }
+    setFormData({
+      bride_id: '',
+      description: '',
+      partner_name: '',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      status: 'Pago',
+      category: 'Geral'
+    });
+    setRevenueSegment('assessoria');
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-[#883545]/10"
+      >
+        <div className="p-6 lg:p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-black text-[#883545] uppercase tracking-widest flex items-center gap-2">
+              <Plus className={`w-6 h-6 p-1 rounded-full ${type === 'entrada' ? 'bg-[#883545] text-white' : 'bg-rose-500 text-white'}`} />
+              {type === 'entrada' ? 'Nova Receita' : 'Nova Despesa'}
+            </h3>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+              <XCircle className="w-6 h-6 text-slate-300" />
+            </button>
+          </div>
+
+          <div className="flex gap-2 mb-6 p-1 bg-slate-50 rounded-2xl border border-[#883545]/5">
+            <button
+              onClick={() => setType('entrada')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${type === 'entrada' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-[#883545]'}`}
+            >
+              Receita (+)
+            </button>
+            <button
+              onClick={() => setType('saida')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${type === 'saida' ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-400 hover:text-rose-500'}`}
+            >
+              Despesa (-)
+            </button>
+          </div>
+
+          {type === 'entrada' && (
+            <div className="flex gap-2 mb-6 p-1 bg-white rounded-xl border border-[#883545]/10">
+              <button
+                type="button"
+                onClick={() => setRevenueSegment('assessoria')}
+                className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'assessoria' ? 'bg-slate-100 text-[#883545]' : 'text-slate-400'}`}
+              >
+                Assessoria
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevenueSegment('bv')}
+                className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${revenueSegment === 'bv' ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400'}`}
+              >
+                Bonificação (BV)
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {type === 'entrada' && (
+              revenueSegment === 'assessoria' ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente</label>
+                  <select
+                    required
+                    value={formData.bride_id}
+                    onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
+                    className="w-full rounded-xl border-none bg-slate-50 text-sm p-4 focus:ring-2 focus:ring-[#883545]/20 font-bold shadow-inner"
+                  >
+                    <option value="">Selecione um cliente...</option>
+                    {brides
+                      .filter(b => {
+                        if (b.id === 58) return false;
+                        if (b.status === 'Ativa') return true;
+                        if (b.status === 'Cancelado' && b.balance >= 1) return true;
+                        return false;
+                      })
+                      .map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} {b.status === 'Cancelado' ? '(Cancelado/Multa)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro / Fornecedor</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Ex: Papelaria Modelo, Buffet X"
+                    value={formData.partner_name}
+                    onChange={(e) => setFormData({ ...formData, partner_name: e.target.value })}
+                    className="w-full rounded-xl border-none bg-emerald-50/30 text-sm p-4 focus:ring-2 focus:ring-emerald-500/20 font-bold shadow-inner"
+                  />
+                </div>
+              )
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+              <input
+                required
+                type="text"
+                placeholder={type === 'entrada' ? "Ex: Parcela 02/10" : "Ex: Uber para evento"}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full rounded-xl border-none bg-slate-50 text-sm p-4 focus:ring-2 focus:ring-[#883545]/20 font-bold shadow-inner"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                <input
+                  required
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full rounded-xl border-none bg-slate-50 text-sm p-4 focus:ring-2 focus:ring-[#883545]/20 font-bold shadow-inner"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="0,00"
+                  className={`w-full rounded-xl border-none bg-slate-50 text-sm p-4 focus:ring-2 focus:ring-[#883545]/20 font-black shadow-inner ${type === 'entrada' ? 'text-emerald-600' : 'text-rose-600'}`}
+                />
+              </div>
+            </div>
+            {type === 'saida' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full rounded-xl border-none bg-slate-50 text-sm p-4 focus:ring-2 focus:ring-[#883545]/20 font-bold shadow-inner"
+                >
+                  <option value="Uber">Uber / Transporte</option>
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Marketing">Marketing / Tráfego</option>
+                  <option value="Equipe">Equipe / Freelance</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+            )}
+            <button type="submit" className={`mt-4 w-full h-14 text-white font-black rounded-2xl shadow-xl transition-all text-xs uppercase tracking-widest ${type === 'entrada' ? 'bg-[#883545] shadow-[#883545]/20 hover:bg-[#883545]/90' : 'bg-rose-500 shadow-rose-500/20 hover:bg-rose-600'}`}>
+              {type === 'entrada' ? 'LANÇAR RECEITA' : 'REGISTRAR DESPESA'}
+            </button>
+          </form>
+        </div>
+      </motion.div>
+    </div>
   );
 };
 
@@ -1763,13 +1813,15 @@ export default function App() {
               </button>
             </div>
           </div>
-          <button
-            onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-            className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="uppercase tracking-widest text-xs">Novo Evento</span>
-          </button>
+          {activeTab === 'brides' && (
+            <button
+              onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
+              className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="uppercase tracking-widest text-xs">Novo Evento</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -1818,12 +1870,14 @@ export default function App() {
         </div>
 
         {/* Mobile Floating Action Button */}
-        <button
-          onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-          className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
-        >
-          <Plus className="w-8 h-8" />
-        </button>
+        {activeTab === 'brides' && (
+          <button
+            onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
+            className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
+          >
+            <Plus className="w-8 h-8" />
+          </button>
+        )}
       </main>
 
       <BrideModal
@@ -1844,28 +1898,28 @@ const MobileNav = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTa
       className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'dashboard' ? 'text-[#883545] scale-110' : 'text-slate-400 opacity-60'}`}
     >
       <LayoutDashboard className="w-5 h-5" />
-      <span className="text-[10px] font-bold uppercase tracking-widest">Início</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest">Dashboard</span>
     </button>
     <button
       onClick={() => setActiveTab('brides')}
       className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'brides' ? 'text-[#883545] scale-110' : 'text-slate-400 opacity-60'}`}
     >
       <Users className="w-5 h-5" />
-      <span className="text-[10px] font-bold uppercase tracking-widest">Noivas</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest">Clientes</span>
     </button>
     <button
       onClick={() => setActiveTab('finance')}
       className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'finance' ? 'text-[#883545] scale-110' : 'text-slate-400 opacity-60'}`}
     >
       <CircleDollarSign className="w-5 h-5" />
-      <span className="text-[10px] font-bold uppercase tracking-widest">Caixa</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest">Financeiro</span>
     </button>
     <button
       onClick={() => setActiveTab('settings')}
       className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'settings' ? 'text-[#883545] scale-110' : 'text-slate-400 opacity-60'}`}
     >
       <Settings className="w-5 h-5" />
-      <span className="text-[10px] font-bold uppercase tracking-widest">Ajustes</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest">Configurações</span>
     </button>
   </div>
 );
