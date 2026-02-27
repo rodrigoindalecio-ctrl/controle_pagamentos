@@ -2505,7 +2505,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
   );
 };
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string }) => {
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean> }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
@@ -2582,13 +2582,13 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
               <div className="flex justify-between items-center">
                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Perfil da Assessoria</h3>
                 <button
-                  onClick={() => {
-                    localStorage.setItem('wedding_settings', JSON.stringify(settings));
-                    alert('Configurações de perfil salvas com sucesso! ✓');
+                  onClick={async () => {
+                    const success = await onSaveSettings(settings);
+                    if (success) alert('Configurações da assessoria salvas no banco de dados! ✓');
                   }}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all"
+                  className="px-6 py-2 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#883545]/20 hover:bg-[#883545]/90 transition-all"
                 >
-                  Salvar Perfil
+                  Salvar Perfil Assessoria
                 </button>
               </div>
 
@@ -2654,10 +2654,21 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
               </div>
 
               <div className="pt-8 border-t border-slate-100">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-3">
-                  <User className="text-[#883545] w-6 h-6" />
-                  Perfil do Usuário
-                </h3>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
+                    <User className="text-[#883545] w-6 h-6" />
+                    Perfil do Usuário
+                  </h3>
+                  <button
+                    onClick={async () => {
+                      const success = await onSaveProfile(userProfile);
+                      if (success) alert('Perfil do usuário atualizado no Supabase! ✓');
+                    }}
+                    className="px-6 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-black transition-all"
+                  >
+                    Salvar Usuário
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Completo</label>
@@ -2770,6 +2781,18 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
           {activeTab === 'services' && (
             <div className="space-y-10">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Serviços & Parceiros</h3>
+                <button
+                  onClick={async () => {
+                    const success = await onSaveSettings(settings);
+                    if (success) alert('Serviços e parceiros salvos no banco de dados! ✓');
+                  }}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
               <section className="space-y-4">
                 <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                   <span className="p-1.5 bg-[#883545]/10 rounded-lg text-[#883545]">
@@ -2860,7 +2883,18 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
           {activeTab === 'goals' && (
             <div className="space-y-8">
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Metas & Regras Financeiras</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Metas & Regras Financeiras</h3>
+                <button
+                  onClick={async () => {
+                    const success = await onSaveSettings(settings);
+                    if (success) alert('Metas e regras salvas com sucesso! ✓');
+                  }}
+                  className="px-6 py-2 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#883545]/20 hover:bg-[#883545]/90 transition-all"
+                >
+                  Salvar Metas
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Meta de Faturamento Anual (R$)</label>
@@ -3220,17 +3254,24 @@ export default function App() {
     try {
       const y = year || filterYear;
       const m = month || filterMonth;
-      const [statsRes, bridesRes, paymentsRes, expensesRes] = await Promise.all([
+      const [statsRes, bridesRes, paymentsRes, expensesRes, settingsRes] = await Promise.all([
         authFetch(`/api/dashboard/stats?year=${y}&month=${m}`),
         authFetch('/api/brides'),
         authFetch('/api/payments'),
-        authFetch('/api/expenses')
+        authFetch('/api/expenses'),
+        authFetch('/api/settings')
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
       if (bridesRes.ok) setBrides(await bridesRes.json());
       if (paymentsRes.ok) setPayments(await paymentsRes.json());
       if (expensesRes.ok) setExpenses(await expensesRes.json());
+      if (settingsRes.ok) {
+        const dbSettings = await settingsRes.json();
+        if (dbSettings && Object.keys(dbSettings).length > 0) {
+          setSettings(dbSettings);
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -3306,6 +3347,38 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleSaveSettings = async (newSettings: AppSettings) => {
+    try {
+      const res = await authFetch('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify(newSettings)
+      });
+      if (res.ok) {
+        setSettings(newSettings);
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
+  const handleSaveProfile = async (newProfile: any) => {
+    try {
+      const res = await authFetch('/api/profile', {
+        method: 'POST',
+        body: JSON.stringify(newProfile)
+      });
+      if (res.ok) {
+        setUserProfile(newProfile);
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
   };
 
   // Logout: invalida a sessão no backend e limpa o token local
@@ -3497,6 +3570,8 @@ export default function App() {
                       userProfile={userProfile}
                       setUserProfile={setUserProfile}
                       authToken={authToken}
+                      onSaveSettings={handleSaveSettings}
+                      onSaveProfile={handleSaveProfile}
                     />
                   )}
                 </AnimatePresence>

@@ -106,7 +106,6 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres.' });
     }
 
-    // Atualiza a senha direito no Supabase Auth via Admin API
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
         password: new_password
     });
@@ -116,8 +115,46 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
         return res.status(500).json({ error: 'Não foi possível alterar a senha. Tente novamente.' });
     }
 
-    console.log(`[AUTH] Senha alterada com sucesso para usuário: ${user.email}`);
     return res.json({ success: true, message: 'Senha alterada com sucesso!' });
+});
+
+// --- Rotas de Configurações e Perfil (Persistência no DB via User Metadata) ---
+app.get("/api/settings", requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    const { data: { user: latestUser }, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
+
+    if (error || !latestUser) return res.status(500).json({ error: 'Erro ao buscar configurações' });
+    res.json(latestUser.user_metadata?.app_settings || {});
+});
+
+app.post("/api/settings", requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    const settings = req.body;
+
+    const { data: { user: latestUser }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (fetchError || !latestUser) return res.status(500).json({ error: 'Erro ao buscar usuário' });
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...latestUser.user_metadata, app_settings: settings }
+    });
+
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
+});
+
+app.post("/api/profile", requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    const { name } = req.body;
+
+    const { data: { user: latestUser }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (fetchError || !latestUser) return res.status(500).json({ error: 'Erro ao buscar usuário' });
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...latestUser.user_metadata, name }
+    });
+
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
 });
 
 // === API Routes (todas protegidas por autenticação) ===
