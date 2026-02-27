@@ -566,6 +566,7 @@ app.post("/api/brides", requireAuth, async (req, res) => {
             name,
             email,
             event_date: event_date || null,
+            event_location: req.body.event_location || null,
             service_type,
             contract_value,
             original_value,
@@ -729,6 +730,7 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
             name,
             email,
             event_date,
+            event_location: req.body.event_location,
             service_type,
             contract_value,
             original_value

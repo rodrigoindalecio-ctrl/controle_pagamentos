@@ -46,6 +46,7 @@ import {
   User,
   ShieldCheck,
   Sparkles,
+  MapPin,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -63,6 +64,7 @@ interface Bride {
   contract_value: number;
   original_value: number;
   balance: number;
+  event_location: string;
 }
 
 interface Payment {
@@ -151,6 +153,7 @@ interface AppSettings {
   };
   services: string[];
   partners: string[];
+  locations: string[];
   goals: {
     annualRevenue: number;
     fineThresholdDays: number;
@@ -171,6 +174,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   services: ["Assessoria do dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
   partners: ["Papelaria Modelo", "Buffet X", "Uber", "Freelancer"],
+  locations: ["Espaço Villa Lobos", "Buffet Torres", "Fazenda Vila Rica"],
   goals: {
     annualRevenue: 100000,
     fineThresholdDays: 30,
@@ -1454,6 +1458,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [statusFilter, setStatusFilter] = useState('Ativa');
   const [yearFilter, setYearFilter] = useState('Todos');
   const [balanceFilter, setBalanceFilter] = useState('Todos');
+  const [localFilter, setLocalFilter] = useState('Todos');
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
   const [brideForDistrato, setBrideForDistrato] = useState<Bride | null>(null);
@@ -1475,9 +1480,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
     const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;
     const matchesYear = yearFilter === 'Todos' || (b.event_date || '').startsWith(yearFilter);
     const matchesBalance = balanceFilter === 'Todos' || (balanceFilter === 'Com Pendência' ? b.balance > 1 : b.balance <= 1);
+    const matchesLocal = localFilter === 'Todos' || b.event_location === localFilter;
 
-    return matchesSearch && matchesStatus && matchesYear && matchesBalance;
-  });
+    return matchesSearch && matchesStatus && matchesYear && matchesBalance && matchesLocal;
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   const years = Array.from(new Set(
     brides.filter(b => b.id !== 58).map(b => {
@@ -1583,8 +1589,22 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Local</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={localFilter}
+                      onChange={(e) => setLocalFilter(e.target.value)}
+                    >
+                      <option>Todos</option>
+                      {([...(settings.locations || [])].sort((a, b) => a.localeCompare(b))).map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
                 <button
-                  onClick={() => { setSearchTerm(''); setStatusFilter('Ativa'); setYearFilter('Todos'); setBalanceFilter('Todos'); }}
+                  onClick={() => { setSearchTerm(''); setStatusFilter('Ativa'); setYearFilter('Todos'); setBalanceFilter('Todos'); setLocalFilter('Todos'); }}
                   className="w-full p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
                   title="Limpar Filtros"
                 >
@@ -1671,8 +1691,22 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
         </div>
+        <div className="w-full md:w-56 space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Local do Evento</label>
+          <div className="relative">
+            <select
+              className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+              value={localFilter}
+              onChange={(e) => setLocalFilter(e.target.value)}
+            >
+              <option>Todos</option>
+              {[...(settings.locations || [])].sort((a, b) => a.localeCompare(b)).map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
         <button
-          onClick={() => { setSearchTerm(''); setStatusFilter('Ativa'); setYearFilter('Todos'); setBalanceFilter('Todos'); }}
+          onClick={() => { setSearchTerm(''); setStatusFilter('Ativa'); setYearFilter('Todos'); setBalanceFilter('Todos'); setLocalFilter('Todos'); }}
           className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
           title="Limpar Filtros"
         >
@@ -1763,6 +1797,13 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <p className="text-[9px] font-black text-[#883545] uppercase tracking-widest">Saldo Devedor {bride.status === 'Cancelado' ? '(Multa)' : ''}</p>
                     <p className="text-sm font-black text-[#883545]">R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
+                  <div className="space-y-1 col-span-2 pt-2 border-t border-slate-50">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Local do Evento</p>
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      {bride.event_location || 'Não informado'}
+                    </div>
+                  </div>
                   <div className="space-y-1 flex flex-col justify-end">
                     <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest self-start ${bride.status === 'Ativa' ? 'bg-emerald-50 text-emerald-600' :
                       bride.status === 'Concluído' ? 'bg-blue-50 text-blue-600' :
@@ -1786,6 +1827,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
               <tr className="bg-slate-50 text-slate-500 text-[10px] lg:text-xs uppercase tracking-wider font-bold border-b border-[#883545]/5">
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Cliente / Casal</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Data Evento</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-5">Local</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Serviço</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Valor Contrato</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Pago</th>
@@ -1814,6 +1856,12 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                         <div className="flex items-center gap-2 text-slate-700 text-xs">
                           <Calendar className={`${settings.ui.compactMode ? 'w-3 h-3' : 'w-4 h-4'} text-slate-400`} />
                           {bride.event_date && formatDisplayDate(bride.event_date)}
+                        </div>
+                      </td>
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-slate-500`}>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-slate-300" />
+                          {bride.event_location || '-'}
                         </div>
                       </td>
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-slate-600`}>
@@ -1910,7 +1958,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
 
 // --- Finance View ---
 
-const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, key?: string }) => {
+const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense, onGoToSettings }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, onGoToSettings: () => void, key?: string }) => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   // Filtros para lançamentos recentes
@@ -2021,6 +2069,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
             partners={settings.partners}
             onAddPayment={onAddPayment}
             onAddExpense={onAddExpense}
+            onGoToSettings={onGoToSettings}
           />
         )}
       </AnimatePresence>
@@ -2116,7 +2165,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                       onChange={(e) => setPartnerFilter(e.target.value)}
                     >
                       <option>Todos</option>
-                      {settings.partners.map(p => <option key={p} value={p}>{p}</option>)}
+                      {[...(settings.partners || [])].sort((a, b) => a.localeCompare(b)).map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
@@ -2306,7 +2355,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   );
 };
 
-const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void }) => {
+const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense, onGoToSettings }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, onGoToSettings: () => void }) => {
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
@@ -2450,12 +2499,20 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
                   <select
                     required
                     value={formData.partner_name}
-                    onChange={(e) => setFormData({ ...formData, partner_name: e.target.value })}
+                    onChange={(e) => {
+                      if (e.target.value === 'NEW_PARTNER') {
+                        onGoToSettings();
+                      } else {
+                        setFormData({ ...formData, partner_name: e.target.value });
+                      }
+                    }}
                     className="w-full rounded-xl border-none bg-emerald-50/30 text-sm p-4 focus:ring-2 focus:ring-emerald-500/20 font-bold shadow-inner"
                   >
                     <option value="">Selecione um parceiro...</option>
-                    {partners.map(p => <option key={p} value={p}>{p}</option>)}
-                    <option value="custom">+ Outro (Digitar na descrição)</option>
+                    {[...(partners || [])].sort((a, b) => a.localeCompare(b)).map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                    <option value="NEW_PARTNER" className="font-black text-emerald-600 bg-emerald-50 italic">➕ Cadastrar Novo Fornecedor...</option>
                   </select>
                 </div>
               )
@@ -2521,8 +2578,8 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
   );
 };
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean> }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile' }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system' }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>(initialTab);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
@@ -2543,13 +2600,15 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
     URL.revokeObjectURL(url);
   };
 
-  const addItem = (list: 'services' | 'partners', value: string) => {
+  const addItem = (list: 'services' | 'partners' | 'locations', value: string) => {
     if (!value) return;
-    setSettings({ ...settings, [list]: [...settings[list], value] });
+    const currentList = settings[list] || [];
+    setSettings({ ...settings, [list]: [...currentList, value] });
   };
 
-  const removeItem = (list: 'services' | 'partners', index: number) => {
-    const newList = [...settings[list]];
+  const removeItem = (list: 'services' | 'partners' | 'locations', index: number) => {
+    const currentList = settings[list] || [];
+    const newList = [...currentList];
     newList.splice(index, 1);
     setSettings({ ...settings, [list]: newList });
   };
@@ -2841,7 +2900,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {settings.services.map((service, idx) => (
+                  {(settings.services || []).map((service, idx) => (
                     <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-full text-xs font-bold border border-slate-200">
                       {service}
                       <button onClick={() => removeItem('services', idx)} className="hover:text-rose-500 transition-colors">
@@ -2884,10 +2943,53 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {settings.partners.map((partner, idx) => (
+                  {(settings.partners || []).map((partner, idx) => (
                     <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
                       {partner}
                       <button onClick={() => removeItem('partners', idx)} className="hover:text-rose-500 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+                    <Calendar className="w-4 h-4" />
+                  </span>
+                  Locais de Evento
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    id="new-location"
+                    type="text"
+                    placeholder="Ex: Espaço Villa Lobos"
+                    className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        addItem('locations', (e.target as HTMLInputElement).value);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('new-location') as HTMLInputElement;
+                      addItem('locations', input.value);
+                      input.value = '';
+                    }}
+                    className="px-6 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {(settings.locations || []).map((location, idx) => (
+                    <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-100">
+                      {location}
+                      <button onClick={() => removeItem('locations', idx)} className="hover:text-rose-500 transition-colors">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </span>
@@ -3010,12 +3112,13 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
   );
 };
 
-const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null, serviceTypes: string[] }) => {
+const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locations, onGoToSettings }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null, serviceTypes: string[], locations: string[], onGoToSettings: () => void }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     event_date: '',
     service_type: '',
+    event_location: '',
     contract_value: '',
     original_value: ''
   });
@@ -3027,6 +3130,7 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { is
         email: brideToEdit.email || '',
         event_date: brideToEdit.event_date ? brideToEdit.event_date.split('T')[0] : '',
         service_type: brideToEdit.service_type || '',
+        event_location: brideToEdit.event_location || '',
         contract_value: brideToEdit.contract_value?.toString() || '',
         original_value: brideToEdit.original_value?.toString() || ''
       });
@@ -3036,6 +3140,7 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { is
         email: '',
         event_date: '',
         service_type: '',
+        event_location: '',
         contract_value: '',
         original_value: ''
       });
@@ -3108,10 +3213,37 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { is
                   onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
                 >
                   <option value="">Selecione o serviço...</option>
-                  {serviceTypes.map(s => <option key={s} value={s}>{s}</option>)}
+                  {([...(serviceTypes || [])].sort((a, b) => a.localeCompare(b))).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Local do Evento</label>
+              <select
+                className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
+                value={formData.event_location}
+                onChange={(e) => {
+                  if (e.target.value === 'NEW_LOCATION') {
+                    onGoToSettings();
+                  } else {
+                    setFormData({ ...formData, event_location: e.target.value });
+                  }
+                }}
+              >
+                <option value="">Selecione o local...</option>
+                {(locations || [])
+                  .slice()
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                <option value="NEW_LOCATION" className="font-black text-[#883545] bg-rose-50 italic">➕ Cadastrar Novo Local...</option>
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Contrato (R$)</label>
@@ -3167,6 +3299,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [brides, setBrides] = useState<Bride[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -3177,7 +3310,20 @@ export default function App() {
   // Settings State
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('wedding_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    if (!saved) return DEFAULT_SETTINGS;
+    try {
+      const parsed = JSON.parse(saved);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        profile: { ...DEFAULT_SETTINGS.profile, ...(parsed.profile || {}) },
+        services: Array.isArray(parsed.services) ? parsed.services : DEFAULT_SETTINGS.services,
+        partners: Array.isArray(parsed.partners) ? parsed.partners : DEFAULT_SETTINGS.partners,
+        locations: Array.isArray(parsed.locations) ? parsed.locations : DEFAULT_SETTINGS.locations
+      };
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
   });
 
   // Helper para fazer fetch autenticado
@@ -3285,7 +3431,14 @@ export default function App() {
       if (settingsRes.ok) {
         const dbSettings = await settingsRes.json();
         if (dbSettings && Object.keys(dbSettings).length > 0) {
-          setSettings(dbSettings);
+          setSettings(prev => ({
+            ...DEFAULT_SETTINGS,
+            ...dbSettings,
+            profile: { ...DEFAULT_SETTINGS.profile, ...(dbSettings.profile || {}) },
+            services: Array.isArray(dbSettings.services) ? dbSettings.services : (prev.services || DEFAULT_SETTINGS.services),
+            partners: Array.isArray(dbSettings.partners) ? dbSettings.partners : (prev.partners || DEFAULT_SETTINGS.partners),
+            locations: Array.isArray(dbSettings.locations) ? dbSettings.locations : (prev.locations || DEFAULT_SETTINGS.locations)
+          }));
         }
       }
     } catch (error) {
@@ -3575,19 +3728,24 @@ export default function App() {
                       settings={settings}
                       onAddPayment={handleAddPayment}
                       onAddExpense={handleAddExpense}
+                      onGoToSettings={() => {
+                        setSettingsSubTab('services');
+                        setActiveTab('settings');
+                      }}
                     />
                   )}
                   {activeTab === 'settings' && (
                     <SettingsView
-                      key="settings"
+                      key={`settings-${settingsSubTab}`}
+                      data={{ brides, payments, expenses }}
                       settings={settings}
                       setSettings={setSettings}
-                      data={{ brides, payments, expenses }}
                       userProfile={userProfile}
                       setUserProfile={setUserProfile}
                       authToken={authToken}
                       onSaveSettings={handleSaveSettings}
                       onSaveProfile={handleSaveProfile}
+                      initialTab={settingsSubTab}
                     />
                   )}
                 </AnimatePresence>
@@ -3613,6 +3771,12 @@ export default function App() {
         onSave={handleSaveBride}
         brideToEdit={brideToEdit}
         serviceTypes={settings.services}
+        locations={settings.locations}
+        onGoToSettings={() => {
+          setIsBrideModalOpen(false);
+          setSettingsSubTab('services');
+          setActiveTab('settings');
+        }}
       />
       {isAuthenticated && <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />}
     </div>
