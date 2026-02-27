@@ -2721,15 +2721,23 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Perfil da Assessoria</h3>
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Informações Gerais</h3>
                 <button
                   onClick={async () => {
-                    const success = await onSaveSettings(settings);
-                    if (success) alert('Configurações da assessoria salvas no banco de dados! ✓');
+                    const s1 = await onSaveSettings(settings);
+                    const s2 = await onSaveProfile(userProfile);
+                    if (s1 && s2) {
+                      localStorage.setItem('wedding_settings', JSON.stringify(settings));
+                      localStorage.setItem('wedding_user_profile', JSON.stringify(userProfile));
+                      alert('Todas as alterações foram salvas no banco de dados! ✓');
+                    } else {
+                      alert('Houve um erro ao salvar algumas informações. Verifique sua conexão.');
+                    }
                   }}
-                  className="px-6 py-2 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#883545]/20 hover:bg-[#883545]/90 transition-all"
+                  className="px-8 py-3 bg-[#883545] text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-[#883545]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
                 >
-                  Salvar Perfil Assessoria
+                  <CheckCircle className="w-4 h-4" />
+                  Salvar Todas as Alterações
                 </button>
               </div>
 
@@ -2795,21 +2803,10 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
               </div>
 
               <div className="pt-8 border-t border-slate-100">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
-                    <User className="text-[#883545] w-6 h-6" />
-                    Perfil do Usuário
-                  </h3>
-                  <button
-                    onClick={async () => {
-                      const success = await onSaveProfile(userProfile);
-                      if (success) alert('Perfil do usuário atualizado no Supabase! ✓');
-                    }}
-                    className="px-6 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-black transition-all"
-                  >
-                    Salvar Usuário
-                  </button>
-                </div>
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
+                  <User className="text-[#883545] w-6 h-6" />
+                  Perfil do Usuário
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Completo</label>
