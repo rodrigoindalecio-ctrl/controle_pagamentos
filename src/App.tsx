@@ -2902,7 +2902,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : {
       name: 'Rodrigo Indalecio',
       email: 'rodrigoindalecio@hotmail.com',
-      password: '12345678'
+      password: 'Eu@784586'
     };
   });
 
