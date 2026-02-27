@@ -3388,6 +3388,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
   const [stats, setStats] = useState<DashboardStats | null>(() => {
     const saved = localStorage.getItem('wedding_stats');
@@ -3409,6 +3410,17 @@ export default function App() {
   const [isPublicBrandingLoaded, setIsPublicBrandingLoaded] = useState(false);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
+
+  const handleTabChange = (newTab: string) => {
+    if (activeTab === 'settings' && newTab !== 'settings' && hasUnsavedSettings) {
+      if (!window.confirm("Você tem alterações nas configurações que não foram salvas.\n\nDeseja sair sem salvar e perder essas alterações?")) {
+        return;
+      }
+      setHasUnsavedSettings(false);
+      fetchData(); // Roda para restaurar para a última versão salva do banco
+    }
+    setActiveTab(newTab);
+  };
 
   // Settings State
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -3690,6 +3702,7 @@ export default function App() {
       });
       if (res.ok) {
         setSettings(newSettings);
+        setHasUnsavedSettings(false);
         return true;
       }
     } catch (e) {
@@ -3706,6 +3719,7 @@ export default function App() {
       });
       if (res.ok) {
         setUserProfile(newProfile);
+        setHasUnsavedSettings(false);
         return true;
       }
     } catch (e) {
@@ -3727,6 +3741,7 @@ export default function App() {
     sessionStorage.removeItem('wedding_token');
     sessionStorage.removeItem('wedding_refresh_token');
     setAuthToken(null);
+    setHasUnsavedSettings(false);
     setActiveTab('dashboard');
   };
 
@@ -3756,10 +3771,10 @@ export default function App() {
           </div>
 
           <nav className="flex-1 space-y-2">
-            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-            <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => setActiveTab('brides')} />
-            <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />
-            <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
+            <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => handleTabChange('brides')} />
+            <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => handleTabChange('finance')} />
+            <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
           </nav>
 
           <div className="mt-auto pt-6 border-t border-[#883545]/10">
@@ -3862,7 +3877,7 @@ export default function App() {
                       stats={stats}
                       payments={payments}
                       brides={brides}
-                      onViewAll={() => setActiveTab('brides')}
+                      onViewAll={() => handleTabChange('brides')}
                       filterYear={filterYear}
                       setFilterYear={setFilterYear}
                       filterMonth={filterMonth}
@@ -3895,7 +3910,7 @@ export default function App() {
                       onAddExpense={handleAddExpense}
                       onGoToSettings={() => {
                         setSettingsSubTab('services');
-                        setActiveTab('settings');
+                        handleTabChange('settings');
                       }}
                     />
                   )}
@@ -3904,9 +3919,9 @@ export default function App() {
                       key={`settings-${settingsSubTab}`}
                       data={{ brides, payments, expenses }}
                       settings={settings}
-                      setSettings={setSettings}
+                      setSettings={(s) => { setSettings(s); setHasUnsavedSettings(true); }}
                       userProfile={userProfile}
-                      setUserProfile={setUserProfile}
+                      setUserProfile={(p) => { setUserProfile(p); setHasUnsavedSettings(true); }}
                       authToken={authToken}
                       onSaveSettings={handleSaveSettings}
                       onSaveProfile={handleSaveProfile}
@@ -3940,10 +3955,10 @@ export default function App() {
         onGoToSettings={() => {
           setIsBrideModalOpen(false);
           setSettingsSubTab('services');
-          setActiveTab('settings');
+          handleTabChange('settings');
         }}
       />
-      {isAuthenticated && <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />}
+      {isAuthenticated && <MobileNav activeTab={activeTab} setActiveTab={handleTabChange} />}
     </div>
   );
 }
