@@ -96,6 +96,24 @@ app.post("/api/auth/refresh", async (req, res) => {
         expires_at: data.session.expires_at
     });
 });
+// --- Rota Pública de Configurações (para branding na tela de login) ---
+app.get("/api/public/settings", async (req, res) => {
+    try {
+        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+        if (error || !users || users.length === 0) return res.json({});
+
+        // Pega o rodrigo ou o primeiro usuário da lista
+        const owner = users.find((u: any) => u.email === 'rodrigoindalecio@hotmail.com') || users[0];
+
+        const settings = owner.user_metadata?.app_settings || {};
+        // Retorna apenas os dados de branding necessários
+        res.json({
+            profile: settings.profile || {}
+        });
+    } catch (e) {
+        res.json({});
+    }
+});
 
 // --- Rota de Alteração de Senha ---
 app.post("/api/auth/change-password", requireAuth, async (req, res) => {

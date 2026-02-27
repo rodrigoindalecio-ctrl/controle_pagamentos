@@ -3470,6 +3470,23 @@ export default function App() {
   }, [userProfile]);
 
   useEffect(() => {
+    // Busca informações públicas de branding (para guia anônima/primeiro acesso)
+    if (!isAuthenticated) {
+      fetch('/api/public/settings')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.profile) {
+            setSettings(prev => ({
+              ...prev,
+              profile: { ...prev.profile, ...data.profile }
+            }));
+          }
+        })
+        .catch(() => { });
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     // A tela de loading agora é controlada pelo fetchData ou cache
     // Se já temos cache, podemos liberar o loading mais rápido
     const hasCache = localStorage.getItem('wedding_stats') !== null;
