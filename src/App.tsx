@@ -238,6 +238,21 @@ const StatCard = ({ label, value, icon: Icon, color, trend, children }: any) => 
   );
 };
 
+// --- Helpers de Data para Evitar Fuso Horário (Problema de 1 dia a menos) ---
+const parseDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return null;
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts.map(Number);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+  return new Date(year, month - 1, day);
+};
+
+const formatDisplayDate = (dateStr: string | null | undefined) => {
+  const d = parseDate(dateStr);
+  return d ? d.toLocaleDateString('pt-BR') : '-';
+};
+
 // Implementação mínima de Header
 const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   <div className="mb-4">
@@ -591,7 +606,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
   // Filtrar payments pelo ano/mês se necessário (padrão é o ano inteiro se filterMonth for all)
   const bvInPeriod = bvPayments.filter(p => {
-    const d = p.payment_date ? new Date(p.payment_date) : null;
+    const d = p.payment_date ? parseDate(p.payment_date) : null;
     if (!d) return false;
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
@@ -618,7 +633,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   });
 
   const yearlyRevenueForFilter = payments.filter(p => {
-    const d = p.payment_date ? new Date(p.payment_date) : null;
+    const d = p.payment_date ? parseDate(p.payment_date) : null;
     return d && d.getFullYear() === Number(filterYear) && (p.status || '').trim().toLowerCase() === 'pago';
   }).reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
 
@@ -628,7 +643,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
   // 1. Pegar todos os pagamentos realizados no período selecionado (Geralmente entradas > 0)
   const paymentsInPeriod = payments.filter(p => {
-    const d = p.payment_date ? new Date(p.payment_date) : null;
+    const d = p.payment_date ? parseDate(p.payment_date) : null;
     if (!d || (p.status || '').trim().toLowerCase() !== 'pago') return false;
 
     // Helper simples para valor numérico
@@ -682,7 +697,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
       const monthNum = mIdx + 1;
       const total = payments
         .filter(p => {
-          const d = p.payment_date ? new Date(p.payment_date) : null;
+          const d = p.payment_date ? parseDate(p.payment_date) : null;
           return d && d.getFullYear() === Number(year) && d.getMonth() + 1 === monthNum && (p.status || '').trim().toLowerCase() === 'pago';
         })
         .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
@@ -942,7 +957,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
                     id: b.id,
                     name: b.name,
                     balance: Number(b.balance),
-                    eventDate: new Date(b.event_date),
+                    eventDate: parseDate(b.event_date) || new Date(),
                   }))
                   .sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
 
@@ -1722,7 +1737,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Data do Evento</p>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
                       <Calendar className="w-3.5 h-3.5 text-[#883545]/40" />
-                      {bride.event_date && new Date(bride.event_date).toLocaleDateString('pt-BR')}
+                      {bride.event_date && formatDisplayDate(bride.event_date)}
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -1798,7 +1813,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
                         <div className="flex items-center gap-2 text-slate-700 text-xs">
                           <Calendar className={`${settings.ui.compactMode ? 'w-3 h-3' : 'w-4 h-4'} text-slate-400`} />
-                          {bride.event_date && new Date(bride.event_date).toLocaleDateString('pt-BR')}
+                          {bride.event_date && formatDisplayDate(bride.event_date)}
                         </div>
                       </td>
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-slate-600`}>
@@ -1921,7 +1936,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
         (item as any).partner_name === partnerFilter;
       // Filtro de data
       let dateMatch = true;
-      const itemDate = new Date(item.payment_date);
+      const itemDate = parseDate(item.payment_date) || new Date();
       if (dateFilter === 'Hoje') {
         const today = new Date();
         dateMatch = itemDate.toDateString() === today.toDateString();
@@ -1935,8 +1950,9 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
         dateMatch = diff >= 0 && diff <= 30;
       } else if (dateFilter === 'Personalizado') {
         if (customStart && customEnd) {
-          const start = new Date(customStart);
-          const end = new Date(customEnd);
+          const start = parseDate(customStart) || new Date(0);
+          const end = parseDate(customEnd) || new Date();
+          if (end) end.setHours(23, 59, 59, 999); // Inlcui o dia final inteiro
           dateMatch = itemDate >= start && itemDate <= end;
         } else {
           dateMatch = true;
@@ -1944,7 +1960,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
       }
       return searchMatch && typeMatch && dateMatch;
     })
-    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
+    .sort((a, b) => (parseDate(b.payment_date)?.getTime() || 0) - (parseDate(a.payment_date)?.getTime() || 0));
   const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
@@ -1952,14 +1968,14 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   const totalRecebidoAno = payments
     .filter(p => {
       const isPaid = (p.status || '').trim().toLowerCase() === 'pago';
-      const year = p.payment_date ? new Date(p.payment_date).getFullYear() : null;
+      const year = p.payment_date ? parseDate(p.payment_date)?.getFullYear() : null;
       return isPaid && year === currentYear;
     })
     .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
 
   const totalDespesasAno = expenses
     .filter(e => {
-      const year = e.date ? new Date(e.date).getFullYear() : null;
+      const year = e.date ? parseDate(e.date)?.getFullYear() : null;
       return year === currentYear;
     })
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -1967,7 +1983,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   const totalPendenteAno = brides
     .filter(b => {
       const isActiveOrCancelled = (b.status === 'Ativa' || b.status === 'Cancelado') && b.id !== 58;
-      const year = b.event_date ? new Date(b.event_date).getFullYear() : null;
+      const year = b.event_date ? parseDate(b.event_date)?.getFullYear() : null;
       return isActiveOrCancelled && year === currentYear;
     })
     .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
@@ -2153,7 +2169,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                     <div className="flex justify-between items-center pt-2 border-t border-white">
                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
                         <Calendar className="w-3 h-3 text-[#883545]/40" />
-                        {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
+                        {item.payment_date && formatDisplayDate(item.payment_date)}
                       </div>
                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${item.isExpense ? 'bg-rose-100 text-rose-700' :
                         (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
@@ -2190,7 +2206,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                           <p className="text-[10px] font-bold text-slate-400 uppercase">{item.description}</p>
                         </td>
                         <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'} text-xs font-medium text-slate-600`}>
-                          {item.payment_date && new Date(item.payment_date).toLocaleDateString('pt-BR')}
+                          {item.payment_date && formatDisplayDate(item.payment_date)}
                         </td>
                         <td className={`${settings.ui.compactMode ? 'px-6 py-2' : 'px-6 py-4'} ${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-black text-right ${item.isExpense ? 'text-rose-500' : 'text-emerald-600'}`}>
                           {item.isExpense ? '-' : ''} R$ {Number(item.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
