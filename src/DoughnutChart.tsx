@@ -27,6 +27,9 @@ export default function DoughnutChart({ labels, data, colors, title }: DoughnutC
     plugins: {
       legend: { display: true, position: 'bottom' as const },
       title: title ? { display: true, text: title } : undefined,
+      datalabels: {
+        display: false
+      }
     },
     cutout: '70%',
     responsive: true,

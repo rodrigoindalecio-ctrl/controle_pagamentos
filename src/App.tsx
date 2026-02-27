@@ -387,8 +387,7 @@ const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token:
 
           <div className="space-y-1">
             <h2 className="text-[10px] font-black text-[#883545]/60 uppercase tracking-[0.3em]">{companyName}</h2>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight italic leading-tight">Acesso Premium</h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Gestão Estratégica</p>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight italic leading-tight">Gestão Financeira</h1>
           </div>
         </div>
 
@@ -405,14 +404,14 @@ const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token:
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">E-mail Corporativo</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Email</label>
             <div className="relative group">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 transition-transform group-focus-within:scale-110">
                 <Mail className="w-4 h-4 text-[#883545]/40 group-focus-within:text-[#883545] transition-colors" />
               </div>
               <input
                 type="email"
-                placeholder="rodrigoindalecio@hotmail.com"
+                placeholder="email@email.com.br"
                 className="w-full pl-14 pr-6 py-5 bg-white border border-slate-100 rounded-[1.5rem] text-sm font-bold shadow-sm focus:ring-4 focus:ring-[#883545]/5 focus:border-[#883545]/20 focus:bg-white transition-all outline-none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -421,7 +420,7 @@ const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token:
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Chave de Acesso</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Senha</label>
             <div className="relative group">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 transition-transform group-focus-within:scale-110">
                 <Lock className="w-4 h-4 text-[#883545]/40 group-focus-within:text-[#883545] transition-colors" />
@@ -458,14 +457,11 @@ const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token:
               ) : (
                 <ShieldCheck className="w-5 h-5 relative z-10" />
               )}
-              <span className="relative z-10">ENTRAR NO PORTAL</span>
+              <span className="relative z-10">ENTRAR</span>
             </button>
           </div>
 
-          <div className="flex items-center justify-center gap-2 pt-4">
-            <Sparkles className="w-3 h-3 text-[#F59E42]" />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sistema Seguro & Criptografado</p>
-          </div>
+
         </form>
       </motion.div>
     </div>
@@ -955,116 +951,156 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
       </div>
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
-        {/* Gráfico Mapa de Ocupação de Agenda */}
-        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
-          <h3 className="text-lg lg:text-xl font-bold mb-4">Ocupação de Agenda</h3>
-          <OcupacaoAgendaBarChart
-            labels={anosAgenda}
-            values={eventosPorAno}
-            color="#883545"
-            title="Eventos Fechados por Ano"
-          />
-        </div>
-        {/* Gráfico de Rosca: Mix de Receita por Serviço */}
-        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
-          <h3 className="text-lg lg:text-xl font-bold mb-4">Mix de Receita por Serviço</h3>
-          {mixLabels.length > 0 ? (
-            <DoughnutChart
-              labels={mixLabels}
-              data={mixData}
-              colors={mixLabels.map((_, i) => mixColors[i % mixColors.length])}
-              title="Receita por Tipo de Serviço"
-            />
-          ) : (
-            <div className="text-slate-400 text-sm italic py-12">Sem contratos no período selecionado.</div>
-          )}
+      {/* Mix de Receita por Serviço — Card expandido */}
+      <div className="bg-white rounded-2xl shadow-sm border border-[#883545]/10 overflow-hidden">
+        <div className="p-5 lg:p-8 border-b border-[#883545]/5 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Mix de Receita por Serviço</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Contratos ativos e concluídos no período</p>
+          </div>
+          <span className="text-[10px] font-black text-[#883545] bg-[#883545]/5 px-3 py-1.5 rounded-full uppercase tracking-widest">
+            {contractsInPeriod.length} contratos
+          </span>
         </div>
 
-        {/* Gráfico Volume vs Valor por Tipo de Serviço */}
-        <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col items-center justify-center">
-          <h3 className="text-lg lg:text-xl font-bold mb-4">Volume vs Valor por Tipo</h3>
-          {mixLabels.length > 0 ? (
-            <VolumeValorBarChart
-              labels={mixLabels}
-              volumes={mixLabels.map(label => contractsInPeriod.filter(b => b.service_type === label).length)}
-              valores={mixLabels.map(label => contractsInPeriod.filter(b => b.service_type === label).reduce((sum, b) => sum + (b.contract_value || 0), 0))}
-              colors={["#F59E42", "#883545"]}
-              title="Quantidade x Valor por Serviço"
-            />
-          ) : (
-            <div className="text-slate-400 text-sm italic py-12">Sem contratos no período selecionado.</div>
-          )}
-        </div>
-        <div className="lg:col-span-4 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
-          <div className="flex justify-between items-center mb-6 lg:mb-8">
-            <div>
-              <h3 className="text-lg lg:text-xl font-bold">Fluxo de Caixa</h3>
-              <p className="text-slate-500 text-xs lg:text-sm">Comparativo mensal: Receitas vs Despesas</p>
+        {mixLabels.length > 0 ? (
+          <div className="flex flex-col lg:flex-row">
+            {/* Rosca à esquerda */}
+            <div className="flex items-center justify-center p-6 lg:p-10 lg:w-2/5 border-b lg:border-b-0 lg:border-r border-[#883545]/5">
+              <DoughnutChart
+                labels={mixLabels}
+                data={mixData}
+                colors={mixLabels.map((_, i) => mixColors[i % mixColors.length])}
+                title="Receita por Tipo de Serviço"
+              />
+            </div>
+
+            {/* Lista ranqueada à direita */}
+            <div className="flex-1 p-6 lg:p-8 space-y-4">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Ranking por Valor de Contrato</p>
+              {(() => {
+                const total = mixData.reduce((s, v) => s + v, 0);
+                const sorted = mixLabels
+                  .map((label, i) => ({ label, value: mixData[i], color: mixColors[i % mixColors.length] }))
+                  .sort((a, b) => b.value - a.value);
+                return sorted.map((item, i) => {
+                  const pct = total > 0 ? (item.value / total) * 100 : 0;
+                  return (
+                    <div key={item.label} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="flex items-center justify-center w-5 h-5 rounded-full text-white text-[9px] font-black shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          >
+                            {i + 1}
+                          </div>
+                          <span className="text-xs font-bold text-slate-700 truncate max-w-[160px]">{item.label}</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-[10px] font-black text-slate-400">{pct.toFixed(1)}%</span>
+                          <span className="text-sm font-black text-slate-800">
+                            R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.8, delay: i * 0.1, ease: 'easeOut' }}
+                          className="h-full rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+              <div className="pt-4 mt-2 border-t border-slate-100 flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</span>
+                <span className="text-base font-black text-[#883545]">
+                  R$ {mixData.reduce((s, v) => s + v, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex-1 min-h-[250px] flex items-end justify-around gap-1 lg:gap-4 px-2 lg:px-4">
-            {(stats.chartData || []).map((data, i) => (
-              <div key={i} className="flex flex-col items-center gap-2 h-full justify-end">
-                <div className="flex justify-center gap-1 lg:gap-2 items-end h-[180px] lg:h-[220px] mb-12 lg:mb-16 relative">
-                  {/* Revenue Bar */}
-                  <div className="relative flex flex-col items-center justify-end h-full w-3 lg:w-6 group/rev">
-                    {data.revenue > 0 && (
-                      <div
-                        className="absolute whitespace-nowrap text-[8px] lg:text-[10px] font-black text-[#883545] transition-all duration-1000"
-                        style={{
-                          bottom: `${(data.revenue / maxVal) * 100}%`,
-                          paddingBottom: '6px',
-                          transform: 'rotate(-90deg)',
-                          transformOrigin: 'left bottom',
-                          left: '50%'
-                        }}
-                      >
-                        R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                    <div
-                      className="w-full bg-[#883545] rounded-t-mg lg:rounded-t-lg transition-all duration-1000 shadow-sm"
-                      style={{ height: `${Math.max((data.revenue / maxVal) * 100, 4)}%` }}
-                    />
-                  </div>
-                  {/* Expenses Bar */}
-                  <div className="relative flex flex-col items-center justify-end h-full w-3 lg:w-6 group/exp">
-                    {data.expenses > 0 && (
-                      <div
-                        className="absolute whitespace-nowrap text-[8px] lg:text-[10px] font-black text-slate-400 transition-all duration-1000"
-                        style={{
-                          bottom: `${(data.expenses / maxVal) * 100}%`,
-                          paddingBottom: '6px',
-                          transform: 'rotate(-90deg)',
-                          transformOrigin: 'left bottom',
-                          left: '50%'
-                        }}
-                      >
-                        R$ {data.expenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                    <div
-                      className="w-full bg-slate-200 rounded-t-mg lg:rounded-t-lg transition-all duration-1000 shadow-sm"
-                      style={{ height: `${Math.max((data.expenses / maxVal) * 100, 2)}%` }}
-                    />
-                  </div>
-                </div>
-                <span className="text-[10px] lg:text-xs font-bold text-slate-400 mt-1">{data.month}</span>
-              </div>
-            ))}
+        ) : (
+          <div className="flex items-center justify-center py-20 text-slate-400 text-sm italic font-medium">
+            Sem contratos no período selecionado.
+          </div>
+        )}
+      </div>
+
+      {/* Fluxo de Caixa */}
+      <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
+        <div className="flex justify-between items-center mb-6 lg:mb-8">
+          <div>
+            <h3 className="text-lg lg:text-xl font-bold">Fluxo de Caixa</h3>
+            <p className="text-slate-500 text-xs lg:text-sm">Comparativo mensal: Receitas vs Despesas</p>
           </div>
         </div>
-
-        {/* Ghost Lines Chart: Comparativo de anos */}
-        <div className="lg:col-span-4 bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
-          <h3 className="text-lg lg:text-xl font-bold mb-4">Comparativo de Receita por Ano</h3>
-          <GhostLinesChart
-            labels={ghostMonths}
-            datasets={ghostDatasets}
-            title="Receita Mensal por Ano"
-          />
+        <div className="flex-1 min-h-[250px] flex items-end justify-around gap-1 lg:gap-4 px-2 lg:px-4">
+          {(stats.chartData || []).map((data, i) => (
+            <div key={i} className="flex flex-col items-center gap-2 h-full justify-end">
+              <div className="flex justify-center gap-1 lg:gap-2 items-end h-[180px] lg:h-[220px] mb-12 lg:mb-16 relative">
+                {/* Revenue Bar */}
+                <div className="relative flex flex-col items-center justify-end h-full w-3 lg:w-6 group/rev">
+                  {data.revenue > 0 && (
+                    <div
+                      className="absolute whitespace-nowrap text-[8px] lg:text-[10px] font-black text-[#883545] transition-all duration-1000"
+                      style={{
+                        bottom: `${(data.revenue / maxVal) * 100}%`,
+                        paddingBottom: '6px',
+                        transform: 'rotate(-90deg)',
+                        transformOrigin: 'left bottom',
+                        left: '50%'
+                      }}
+                    >
+                      R$ {data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                  <div
+                    className="w-full bg-[#883545] rounded-t-mg lg:rounded-t-lg transition-all duration-1000 shadow-sm"
+                    style={{ height: `${Math.max((data.revenue / maxVal) * 100, 4)}%` }}
+                  />
+                </div>
+                {/* Expenses Bar */}
+                <div className="relative flex flex-col items-center justify-end h-full w-3 lg:w-6 group/exp">
+                  {data.expenses > 0 && (
+                    <div
+                      className="absolute whitespace-nowrap text-[8px] lg:text-[10px] font-black text-slate-400 transition-all duration-1000"
+                      style={{
+                        bottom: `${(data.expenses / maxVal) * 100}%`,
+                        paddingBottom: '6px',
+                        transform: 'rotate(-90deg)',
+                        transformOrigin: 'left bottom',
+                        left: '50%'
+                      }}
+                    >
+                      R$ {data.expenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                  <div
+                    className="w-full bg-slate-200 rounded-t-mg lg:rounded-t-lg transition-all duration-1000 shadow-sm"
+                    style={{ height: `${Math.max((data.expenses / maxVal) * 100, 2)}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-[10px] lg:text-xs font-bold text-slate-400 mt-1">{data.month}</span>
+            </div>
+          ))}
         </div>
+      </div>
+
+      {/* Ghost Lines Chart: Comparativo de anos */}
+      <div className="bg-white p-4 lg:p-8 rounded-xl shadow-sm border border-[#883545]/10 flex flex-col">
+        <h3 className="text-lg lg:text-xl font-bold mb-4">Comparativo de Receita por Ano</h3>
+        <GhostLinesChart
+          labels={ghostMonths}
+          datasets={ghostDatasets}
+          title="Receita Mensal por Ano"
+        />
       </div>
 
       <ContractsModal
@@ -1079,7 +1115,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         brides={brides}
         filterYear={filterYear}
       />
-    </motion.div>
+    </motion.div >
   );
 };
 
