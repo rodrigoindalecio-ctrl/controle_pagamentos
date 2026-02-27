@@ -9,16 +9,119 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cliente padrão (anon) para operações de dados
 const supabase = createClient(
     process.env.SUPABASE_URL || "",
     process.env.SUPABASE_ANON_KEY || ""
 );
 
+// Cliente admin (service_role) para autenticação server-side - NUNCA expor no front-end
+const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL || "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
+
 const app = express();
 app.use(express.json());
 
-// API Routes
-app.get("/api/dashboard/stats", async (req, res) => {
+// --- Middleware de Autenticação ---
+const requireAuth = async (req: any, res: any, next: any) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (!token) {
+        return res.status(401).json({ error: 'Não autorizado. Faça login novamente.' });
+    }
+
+    // Valida o token JWT com o Supabase
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+        return res.status(401).json({ error: 'Sessão inválida ou expirada. Faça login novamente.' });
+    }
+
+    (req as any).user = user;
+    next();
+};
+
+// --- Rota de Login ---
+app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+    }
+
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password });
+
+    if (error || !data.session) {
+        console.error('[AUTH] Login falhou:', error?.message);
+        return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
+    }
+
+    // Retorna apenas o token e dados básicos do usuário - SEM SENHA
+    return res.json({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at: data.session.expires_at,
+        user: {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.name || data.user.email
+        }
+    });
+});
+
+// --- Rota de Logout ---
+app.post("/api/auth/logout", requireAuth, async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.slice(7);
+    if (token) await supabaseAdmin.auth.admin.signOut(token);
+    return res.json({ success: true });
+});
+
+// --- Rota de Refresh Token ---
+app.post("/api/auth/refresh", async (req, res) => {
+    const { refresh_token } = req.body;
+    if (!refresh_token) return res.status(400).json({ error: 'refresh_token é obrigatório.' });
+
+    const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token });
+    if (error || !data.session) {
+        return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+
+    return res.json({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at: data.session.expires_at
+    });
+});
+
+// --- Rota de Alteração de Senha ---
+app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    const { new_password } = req.body;
+    const user = (req as any).user;
+
+    if (!new_password || new_password.length < 8) {
+        return res.status(400).json({ error: 'A senha deve ter pelo menos 8 caracteres.' });
+    }
+
+    // Atualiza a senha direito no Supabase Auth via Admin API
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        password: new_password
+    });
+
+    if (error) {
+        console.error('[AUTH] Erro ao alterar senha:', error.message);
+        return res.status(500).json({ error: 'Não foi possível alterar a senha. Tente novamente.' });
+    }
+
+    console.log(`[AUTH] Senha alterada com sucesso para usuário: ${user.email}`);
+    return res.json({ success: true, message: 'Senha alterada com sucesso!' });
+});
+
+// === API Routes (todas protegidas por autenticação) ===
+app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     try {
         const now = new Date();
         const queryYear = req.query.year ? parseInt(req.query.year as string) : now.getFullYear();
@@ -397,7 +500,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
     }
 });
 
-app.get("/api/brides", async (req, res) => {
+app.get("/api/brides", requireAuth, async (req, res) => {
     const { data, error } = await supabase
         .from("brides")
         .select("*")
@@ -407,7 +510,7 @@ app.get("/api/brides", async (req, res) => {
     res.json(data);
 });
 
-app.post("/api/brides", async (req, res) => {
+app.post("/api/brides", requireAuth, async (req, res) => {
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
     // Initial balance is the contract value
     const pureNum = (val: any) => {
@@ -438,7 +541,7 @@ app.post("/api/brides", async (req, res) => {
     res.json(data[0]);
 });
 
-app.get("/api/payments", async (req, res) => {
+app.get("/api/payments", requireAuth, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from("payments")
@@ -469,7 +572,7 @@ app.get("/api/payments", async (req, res) => {
     }
 });
 
-app.post("/api/payments", async (req, res) => {
+app.post("/api/payments", requireAuth, async (req, res) => {
     const { bride_id, description, amount_paid, payment_date, status } = req.body;
     const finalDate = payment_date && payment_date !== "" ? payment_date : new Date().toISOString().split('T')[0];
 
@@ -514,7 +617,7 @@ app.post("/api/payments", async (req, res) => {
     res.json(data);
 });
 
-app.patch("/api/brides/:id/status", async (req, res) => {
+app.patch("/api/brides/:id/status", requireAuth, async (req, res) => {
     const { id } = req.params;
     const body = req.body;
     const brideIdNum = Number(id);
@@ -579,7 +682,7 @@ app.patch("/api/brides/:id/status", async (req, res) => {
     }
 });
 
-app.put("/api/brides/:id", async (req, res) => {
+app.put("/api/brides/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
 
@@ -599,14 +702,14 @@ app.put("/api/brides/:id", async (req, res) => {
     res.json({ success: true });
 });
 
-app.delete("/api/brides/:id", async (req, res) => {
+app.delete("/api/brides/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { error } = await supabase.from("brides").delete().eq("id", id);
     if (error) return res.status(500).json(error);
     res.json({ success: true });
 });
 
-app.get("/api/expenses", async (req, res) => {
+app.get("/api/expenses", requireAuth, async (req, res) => {
     const { data, error } = await supabase
         .from("expenses")
         .select("*")
@@ -619,7 +722,7 @@ app.get("/api/expenses", async (req, res) => {
     res.json(data);
 });
 
-app.post("/api/expenses", async (req, res) => {
+app.post("/api/expenses", requireAuth, async (req, res) => {
     const { description, amount, date, category } = req.body;
     const finalDate = date && date !== "" ? date : new Date().toISOString().split('T')[0];
 

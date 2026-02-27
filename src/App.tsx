@@ -316,34 +316,40 @@ const LoadingScreen = ({ logo }: { logo?: string, key?: string }) => (
 );
 
 // --- Componente de Login ---
-const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any) => void, logo?: string, companyName: string, key?: string }) => {
+const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token: string, refreshToken: string) => void, logo?: string, companyName: string, key?: string }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
     setError(null);
 
-    // Usa as credenciais salvas no perfil (que podem ser alteradas nas configurações)
-    const savedUser = JSON.parse(localStorage.getItem('wedding_user') || '{}');
-    const validEmail = savedUser.email || 'rodrigoindalecio@hotmail.com';
-    const validPass = savedUser.password || '12345678';
+    try {
+      // Valida credenciais no BACKEND via Supabase Auth - senha nunca fica no cliente
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-    setTimeout(() => {
-      if (email === validEmail && password === validPass) {
-        onLogin({
-          ...savedUser,
-          email: email
-        });
-      } else {
-        setError('E-mail ou senha incorretos. Tente novamente.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'E-mail ou senha incorretos. Tente novamente.');
         setIsLoggingIn(false);
+        return;
       }
-    }, 1500);
+
+      // Login bem-sucedido: passa token e dados do usuário (SEM senha)
+      onLogin(data.user, data.access_token, data.refresh_token);
+    } catch (err) {
+      setError('Erro de conexão. Verifique sua internet e tente novamente.');
+      setIsLoggingIn(false);
+    }
   };
 
   return (
@@ -2111,11 +2117,85 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                     ))
                   )}
                 </tbody>
+
+                {/* Rodapé com totais dos filtros aplicados */}
+                {filteredItems.length > 0 && (() => {
+                  const totalReceita = filteredItems.filter((i: any) => !i.isExpense).reduce((s: number, i: any) => s + Number(i.amount_paid), 0);
+                  const totalDespesa = filteredItems.filter((i: any) => i.isExpense).reduce((s: number, i: any) => s + Number(i.amount_paid), 0);
+                  const liquido = totalReceita - totalDespesa;
+                  const isPositive = liquido >= 0;
+                  return (
+                    <tfoot>
+                      <tr className="bg-slate-50 border-t-2 border-[#883545]/10">
+                        <td colSpan={2} className="px-6 py-4">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Resultado dos filtros aplicados ({filteredItems.length} lançamentos)
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Receita</span>
+                              <span className="text-xs font-black text-emerald-600">R$ {totalReceita.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Despesa</span>
+                              <span className="text-xs font-black text-rose-500">- R$ {totalDespesa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="w-full h-px bg-slate-200 my-0.5" />
+                            <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${isPositive ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Líquido</span>
+                              <span className={`text-sm font-black ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {isPositive ? '' : '-'} R$ {Math.abs(liquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4" />
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
               </table>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Resumo Mobile */}
+      {filteredItems.length > 0 && (() => {
+        const totalReceita = filteredItems.filter((i: any) => !i.isExpense).reduce((s: number, i: any) => s + Number(i.amount_paid), 0);
+        const totalDespesa = filteredItems.filter((i: any) => i.isExpense).reduce((s: number, i: any) => s + Number(i.amount_paid), 0);
+        const liquido = totalReceita - totalDespesa;
+        const isPositive = liquido >= 0;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lg:hidden bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden"
+          >
+            <div className="p-4 bg-[#883545]/5 border-b border-[#883545]/10">
+              <p className="text-[10px] font-black text-[#883545] uppercase tracking-widest">Resultado dos Filtros ({filteredItems.length} lançamentos)</p>
+            </div>
+            <div className="p-4 grid grid-cols-3 gap-3">
+              <div className="flex flex-col items-center bg-emerald-50 rounded-xl p-3">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Receita</span>
+                <span className="text-xs font-black text-emerald-600 text-center">R$ {totalReceita.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex flex-col items-center bg-rose-50 rounded-xl p-3">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Despesa</span>
+                <span className="text-xs font-black text-rose-500 text-center">R$ {totalDespesa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className={`flex flex-col items-center rounded-xl p-3 ${isPositive ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Líquido</span>
+                <span className={`text-xs font-black text-center ${isPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {isPositive ? '+' : '-'} R$ {Math.abs(liquido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })()}
     </motion.div>
   );
 };
@@ -2335,10 +2415,12 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
   );
 };
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, key?: string }) => {
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [passMessage, setPassMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleExport = () => {
     const backup = {
@@ -2540,23 +2622,57 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                     </div>
                     <div className="flex items-end">
                       <button
-                        onClick={() => {
+                        disabled={isChangingPass}
+                        onClick={async () => {
                           if (newPass.length < 8) {
-                            alert('A senha deve ter pelo menos 8 caracteres!');
+                            setPassMessage({ type: 'error', text: 'A senha deve ter pelo menos 8 caracteres!' });
                             return;
                           }
-                          setUserProfile({ ...userProfile, password: newPass });
-                          setNewPass('');
-                          setShowNewPassword(false);
-                          alert('Senha alterada com sucesso! ✓');
+                          setIsChangingPass(true);
+                          setPassMessage(null);
+                          try {
+                            const res = await fetch('/api/auth/change-password', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                              },
+                              body: JSON.stringify({ new_password: newPass })
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              setPassMessage({ type: 'success', text: 'Senha alterada com sucesso no Supabase! ✓' });
+                              setNewPass('');
+                              setShowNewPassword(false);
+                            } else {
+                              setPassMessage({ type: 'error', text: data.error || 'Erro ao alterar senha.' });
+                            }
+                          } catch (_) {
+                            setPassMessage({ type: 'error', text: 'Erro de conexão. Tente novamente.' });
+                          } finally {
+                            setIsChangingPass(false);
+                          }
                         }}
-                        className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-[#883545] transition-all flex items-center justify-center gap-2"
+                        className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-[#883545] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                       >
-                        <ShieldCheck className="w-4 h-4" />
-                        Atualizar Senha
+                        {isChangingPass ? (
+                          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                        ) : (
+                          <ShieldCheck className="w-4 h-4" />
+                        )}
+                        {isChangingPass ? 'Atualizando...' : 'Atualizar Senha'}
                       </button>
                     </div>
                   </div>
+                  {passMessage && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`text-xs font-bold mt-2 px-1 ${passMessage.type === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}
+                    >
+                      {passMessage.text}
+                    </motion.p>
+                  )}
                 </div>
               </div>
             </div>
@@ -2895,14 +3011,18 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes }: { is
 
 export default function App() {
   const mainContentRef = React.useRef<HTMLDivElement>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('wedding_auth') === 'true');
+
+  // Autenticação: token fica em sessionStorage (apagado ao fechar o browser)
+  const [authToken, setAuthToken] = useState<string | null>(() => sessionStorage.getItem('wedding_token'));
+  const isAuthenticated = !!authToken;
+
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('wedding_user');
+    const saved = localStorage.getItem('wedding_user_profile');
     return saved ? JSON.parse(saved) : {
       name: 'Rodrigo Indalecio',
-      email: 'rodrigoindalecio@hotmail.com',
-      password: 'Eu@784586'
+      email: 'rodrigoindalecio@hotmail.com'
+      // NUNCA armazenar senha aqui
     };
   });
 
@@ -2920,10 +3040,46 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
 
+  // Helper para fazer fetch autenticado
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {})
+    };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+    const res = await fetch(url, { ...options, headers });
+
+    // Se token expirou, tenta renovar com refresh token
+    if (res.status === 401) {
+      const refreshToken = sessionStorage.getItem('wedding_refresh_token');
+      if (refreshToken) {
+        const refreshRes = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          sessionStorage.setItem('wedding_token', refreshData.access_token);
+          sessionStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
+          setAuthToken(refreshData.access_token);
+          // Retry a requisição original com novo token
+          headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+          return fetch(url, { ...options, headers });
+        }
+      }
+      // Não conseguiu renovar: faz logout
+      handleLogout();
+      return res;
+    }
+    return res;
+  };
+
+  // Salva perfil (sem senha) no localStorage para persistir nome/preferências
   useEffect(() => {
-    localStorage.setItem('wedding_auth', isAuthenticated.toString());
-    localStorage.setItem('wedding_user', JSON.stringify(userProfile));
-  }, [isAuthenticated, userProfile]);
+    localStorage.setItem('wedding_user_profile', JSON.stringify(userProfile));
+  }, [userProfile]);
 
   useEffect(() => {
     // Simulando carregamento inicial premium
@@ -2956,10 +3112,10 @@ export default function App() {
       const y = year || filterYear;
       const m = month || filterMonth;
       const [statsRes, bridesRes, paymentsRes, expensesRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?year=${y}&month=${m}`),
-        fetch('/api/brides'),
-        fetch('/api/payments'),
-        fetch('/api/expenses')
+        authFetch(`/api/dashboard/stats?year=${y}&month=${m}`),
+        authFetch('/api/brides'),
+        authFetch('/api/payments'),
+        authFetch('/api/expenses')
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -2980,9 +3136,8 @@ export default function App() {
       const url = brideToEdit ? `/api/brides/${brideToEdit.id}` : '/api/brides';
       const method = brideToEdit ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(brideData)
       });
       if (res.ok) {
@@ -2996,9 +3151,8 @@ export default function App() {
 
   const handleAddPayment = async (paymentData: any) => {
     try {
-      const res = await fetch('/api/payments', {
+      const res = await authFetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(paymentData)
       });
       if (res.ok) fetchData();
@@ -3009,9 +3163,8 @@ export default function App() {
 
   const handleAddExpense = async (expenseData: any) => {
     try {
-      const res = await fetch('/api/expenses', {
+      const res = await authFetch('/api/expenses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(expenseData)
       });
       if (res.ok) fetchData();
@@ -3022,9 +3175,8 @@ export default function App() {
 
   const handleUpdateBrideStatus = async (id: number, status: string, options: any = {}) => {
     try {
-      const res = await fetch(`/api/brides/${id}/status`, {
+      const res = await authFetch(`/api/brides/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status,
           fine_amount: options.fine_amount,
@@ -3040,11 +3192,27 @@ export default function App() {
   const handleDeleteBride = async (id: number) => {
     if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
     try {
-      const res = await fetch(`/api/brides/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/brides/${id}`, { method: 'DELETE' });
       if (res.ok) fetchData();
     } catch (e) {
       console.error(e);
     }
+  };
+
+  // Logout: invalida a sessão no backend e limpa o token local
+  const handleLogout = async () => {
+    try {
+      if (authToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+      }
+    } catch (_) { /* ignora erros de rede no logout */ }
+    sessionStorage.removeItem('wedding_token');
+    sessionStorage.removeItem('wedding_refresh_token');
+    setAuthToken(null);
+    setActiveTab('dashboard');
   };
 
   return (
@@ -3086,7 +3254,7 @@ export default function App() {
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-black text-slate-800 truncate leading-none mb-1 uppercase tracking-tighter">{userProfile.name}</p>
-                <button onClick={() => { setIsAuthenticated(false); setActiveTab('dashboard'); }} className="flex items-center gap-1 text-[10px] font-bold text-[#883545]/60 hover:text-[#883545] transition-colors">
+                <button onClick={() => handleLogout()} className="flex items-center gap-1 text-[10px] font-bold text-[#883545]/60 hover:text-[#883545] transition-colors">
                   <LogOut className="w-3 h-3" />
                   SAIR DA CONTA
                 </button>
@@ -3113,11 +3281,14 @@ export default function App() {
           ) : !isAuthenticated ? (
             <LoginView
               key="login"
-              onLogin={(user) => {
-                setUserProfile(user);
+              onLogin={(user, token, refreshToken) => {
+                // Salva token no sessionStorage (desaparece ao fechar o browser)
+                sessionStorage.setItem('wedding_token', token);
+                sessionStorage.setItem('wedding_refresh_token', refreshToken);
+                setAuthToken(token);
+                setUserProfile({ name: user.name, email: user.email }); // sem senha
                 setActiveTab('dashboard');
                 setIsInitialLoading(true);
-                setIsAuthenticated(true);
                 // Pequeno delay para exibir a experiência de transição premium
                 setTimeout(() => setIsInitialLoading(false), 2000);
               }}
@@ -3158,7 +3329,7 @@ export default function App() {
                     {userProfile.name.split(' ').map((n: any) => n[0]).join('').slice(0, 2)}
                   </div>
                   <button
-                    onClick={() => { setIsAuthenticated(false); setActiveTab('dashboard'); }}
+                    onClick={() => handleLogout()}
                     className="p-2 text-slate-400 hover:text-[#883545] transition-colors"
                   >
                     <LogOut className="w-5 h-5" />
@@ -3216,6 +3387,7 @@ export default function App() {
                       data={{ brides, payments, expenses }}
                       userProfile={userProfile}
                       setUserProfile={setUserProfile}
+                      authToken={authToken}
                     />
                   )}
                 </AnimatePresence>
