@@ -1410,10 +1410,19 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <input
                       type="text"
                       placeholder="Nome ou email..."
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+                      className="w-full pl-11 pr-11 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-[#883545] transition-colors"
+                        title="Limpar busca"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -1489,10 +1498,19 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
             <input
               type="text"
               placeholder="Nome ou email..."
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+              className="w-full pl-11 pr-11 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-[#883545] transition-colors"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
         <div className="w-full md:w-40 space-y-1.5">
@@ -1908,10 +1926,19 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                     <input
                       type="text"
                       placeholder="Descrição ou origem..."
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
+                      className="w-full pl-11 pr-11 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-[#883545] transition-colors"
+                        title="Limpar busca"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
