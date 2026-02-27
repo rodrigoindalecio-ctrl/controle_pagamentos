@@ -1821,8 +1821,8 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         )}
       </div>
 
-      <div className="hidden lg:block bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden min-h-[400px]">
-        <div className="overflow-x-auto">
+      <div className="hidden lg:block bg-white rounded-2xl border border-[#883545]/10 shadow-sm min-h-[400px]">
+        <div>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[10px] lg:text-xs uppercase tracking-wider font-bold border-b border-[#883545]/5">
@@ -1901,7 +1901,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                           <MoreVertical className="w-5 h-5" />
                         </button>
                         {openMenuId === bride.id && (
-                          <div className="absolute right-0 top-14 w-48 bg-white rounded-xl shadow-2xl border border-[#883545]/10 z-50 p-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="absolute right-4 top-12 w-48 bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(136,53,69,0.4)] border border-[#883545]/10 z-[100] p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
                             <p className="px-3 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</p>
                             <button onClick={() => { onEdit(bride); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
                               <Edit className="w-3.5 h-3.5" /> Editar Cliente
@@ -2255,7 +2255,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
               )}
             </div>
 
-            <div className="hidden lg:block overflow-x-auto">
+            <div className="hidden lg:block">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold">
@@ -2512,7 +2512,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
                       })
                       .map(b => (
                         <option key={b.id} value={b.id}>
-                          {b.name} {b.status === 'Cancelado' ? '(Cancelado/Multa)' : ''}
+                          {b.name} - {formatDisplayDate(b.event_date)} {b.status === 'Cancelado' ? '(Cancelado/Multa)' : ''}
                         </option>
                       ))}
                   </select>
@@ -2554,7 +2554,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
                         .sort((a, b) => a.name.localeCompare(b.name))
                         .map(b => (
                           <option key={b.id} value={b.id}>
-                            {b.name}
+                            {b.name} - {formatDisplayDate(b.event_date)}
                           </option>
                         ))}
                     </select>
@@ -3734,7 +3734,7 @@ export default function App() {
               </div>
               <div
                 ref={mainContentRef}
-                className="flex-1 overflow-y-auto p-4 lg:p-10 scrollbar-hide"
+                className="flex-1 overflow-auto p-4 lg:p-10 scrollbar-hide"
               >
                 <AnimatePresence mode="wait">
                   {activeTab === 'dashboard' && (
