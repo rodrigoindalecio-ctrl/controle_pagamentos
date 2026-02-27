@@ -488,7 +488,7 @@ const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token:
   );
 };
 
-const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings, userProfile }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string, userProfile: any }) => {
+const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings, userProfile, isLoading }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string, userProfile: any, isLoading?: boolean }) => {
   const currentYear = new Date().getFullYear();
   // --- Mapa de Ocupação de Agenda ---
   // --- Forecast de Faturamento Projetado ---
@@ -528,7 +528,16 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   const [showCancellationsModal, setShowCancellationsModal] = useState(false);
   const [showBVInMix, setShowBVInMix] = useState(false);
 
-  if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
+  if (!stats) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        className="w-8 h-8 border-4 border-[#883545]/10 border-t-[#883545] rounded-full"
+      />
+      <p className="text-slate-400 font-medium italic animate-pulse">Carregando painel pela primeira vez...</p>
+    </div>
+  );
 
   const maxValRaw = Math.max(...(stats.chartData?.map(d => Math.max(d.revenue, d.expenses)) || [1]), 1);
   const maxVal = maxValRaw * 1.45; // 45% de margem no topo para caber os valores verticais
@@ -723,10 +732,22 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6 lg:space-y-8 pb-20 lg:pb-0"
+      className="space-y-4 lg:space-y-8 pb-10"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <Header title={`Olá, ${userProfile.name.split(' ')[0]}! 👋`} subtitle="Aqui está o resumo estratégico da sua assessoria." />
+        <div className="flex items-center gap-3">
+          <Header title={`Olá, ${userProfile.name.split(' ')[0]}! 👋`} subtitle={`Resumo Estratégica • ${periodLabel}`} />
+          {isLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-full border border-amber-100"
+            >
+              <div className="size-2 bg-amber-400 rounded-full animate-pulse" />
+              <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Sincronizando</span>
+            </motion.div>
+          )}
+        </div>
 
         {/* Period Filter Bar */}
         <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#883545]/10 shadow-sm">
@@ -3345,10 +3366,23 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [brides, setBrides] = useState<Bride[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(() => {
+    const saved = localStorage.getItem('wedding_stats');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [brides, setBrides] = useState<Bride[]>(() => {
+    const saved = localStorage.getItem('wedding_brides');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [payments, setPayments] = useState<Payment[]>(() => {
+    const saved = localStorage.getItem('wedding_payments');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const saved = localStorage.getItem('wedding_expenses');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
 
@@ -3413,9 +3447,13 @@ export default function App() {
   }, [userProfile]);
 
   useEffect(() => {
-    // Simulando carregamento inicial premium
-    const timer = setTimeout(() => setIsInitialLoading(false), 2400);
-    return () => clearTimeout(timer);
+    // A tela de loading agora é controlada pelo fetchData ou cache
+    // Se já temos cache, podemos liberar o loading mais rápido
+    const hasCache = localStorage.getItem('wedding_stats') !== null;
+    if (hasCache) {
+      const timer = setTimeout(() => setIsInitialLoading(false), 1500); // Mínimo para estética
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
@@ -3461,6 +3499,8 @@ export default function App() {
     try {
       const y = year || filterYear;
       const m = month || filterMonth;
+
+      // Busca dados essenciais em paralelo
       const [statsRes, bridesRes, paymentsRes, expensesRes, settingsRes] = await Promise.all([
         authFetch(`/api/dashboard/stats?year=${y}&month=${m}`),
         authFetch('/api/brides'),
@@ -3469,25 +3509,47 @@ export default function App() {
         authFetch('/api/settings')
       ]);
 
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (bridesRes.ok) setBrides(await bridesRes.json());
-      if (paymentsRes.ok) setPayments(await paymentsRes.json());
-      if (expensesRes.ok) setExpenses(await expensesRes.json());
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
+        localStorage.setItem('wedding_stats', JSON.stringify(data));
+      }
+      if (bridesRes.ok) {
+        const data = await bridesRes.json();
+        setBrides(data);
+        localStorage.setItem('wedding_brides', JSON.stringify(data));
+      }
+      if (paymentsRes.ok) {
+        const data = await paymentsRes.json();
+        setPayments(data);
+        localStorage.setItem('wedding_payments', JSON.stringify(data));
+      }
+      if (expensesRes.ok) {
+        const data = await expensesRes.json();
+        setExpenses(data);
+        localStorage.setItem('wedding_expenses', JSON.stringify(data));
+      }
       if (settingsRes.ok) {
         const dbSettings = await settingsRes.json();
         if (dbSettings && Object.keys(dbSettings).length > 0) {
-          setSettings(prev => ({
+          const merged = {
             ...DEFAULT_SETTINGS,
             ...dbSettings,
             profile: { ...DEFAULT_SETTINGS.profile, ...(dbSettings.profile || {}) },
-            services: Array.isArray(dbSettings.services) ? dbSettings.services : (prev.services || DEFAULT_SETTINGS.services),
-            partners: Array.isArray(dbSettings.partners) ? dbSettings.partners : (prev.partners || DEFAULT_SETTINGS.partners),
-            locations: Array.isArray(dbSettings.locations) ? dbSettings.locations : (prev.locations || DEFAULT_SETTINGS.locations)
-          }));
+            services: Array.isArray(dbSettings.services) ? dbSettings.services : (settings.services || DEFAULT_SETTINGS.services),
+            partners: Array.isArray(dbSettings.partners) ? dbSettings.partners : (settings.partners || DEFAULT_SETTINGS.partners),
+            locations: Array.isArray(dbSettings.locations) ? dbSettings.locations : (settings.locations || DEFAULT_SETTINGS.locations)
+          };
+          setSettings(merged);
+          localStorage.setItem('wedding_settings', JSON.stringify(merged));
         }
       }
+      setIsDataLoaded(true);
+      setIsInitialLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Se houver erro ou timeout, pelo menos paramos o loading para mostrar o cache
+      setIsInitialLoading(false);
     }
   };
 
@@ -3750,6 +3812,7 @@ export default function App() {
                       setFilterMonth={setFilterMonth}
                       settings={settings}
                       userProfile={userProfile}
+                      isLoading={!isDataLoaded}
                     />
                   )}
                   {activeTab === 'brides' && (
