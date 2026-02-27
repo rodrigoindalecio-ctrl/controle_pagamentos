@@ -281,11 +281,11 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const monthlyAssessoriaRevenue = allPayments
-            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) !== '58')
+            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && (p.revenue_type === 'assessoria' || (!p.revenue_type && String(p.bride_id) !== '58')))
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const monthlyBVRevenue = allPayments
-            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && String(p.bride_id) === '58')
+            .filter(p => isSelectedPeriod(p.payment_date) && isPaid(p.status) && pureNum(p.amount_paid) > 0 && (p.revenue_type === 'bv' || (!p.revenue_type && String(p.bride_id) === '58')))
             .reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
 
         const yearlyRevenue = allPayments
@@ -611,8 +611,9 @@ app.get("/api/payments", requireAuth, async (req, res) => {
 });
 
 app.post("/api/payments", requireAuth, async (req, res) => {
-    const { bride_id, description, amount_paid, payment_date, status } = req.body;
+    const { bride_id, description, amount_paid, payment_date, status, revenue_type } = req.body;
     const finalDate = payment_date && payment_date !== "" ? payment_date : new Date().toISOString().split('T')[0];
+    const finalRevenueType = revenue_type || (String(bride_id) === '58' ? 'bv' : 'assessoria');
 
     // 1. Insert the payment
     const { data, error } = await supabase
@@ -622,7 +623,8 @@ app.post("/api/payments", requireAuth, async (req, res) => {
             description,
             amount_paid,
             payment_date: finalDate,
-            status: status || 'Pago'
+            status: status || 'Pago',
+            revenue_type: finalRevenueType
         }])
         .select()
         .single();
@@ -644,11 +646,15 @@ app.post("/api/payments", requireAuth, async (req, res) => {
         };
 
         const paidAmount = pureNum(amount_paid);
-        const { data: bride } = await supabase.from("brides").select("balance").eq("id", bride_id).single();
 
-        if (bride) {
-            const newBalance = Math.max(0, (bride.balance || 0) - paidAmount);
-            await supabase.from("brides").update({ balance: newBalance }).eq("id", bride_id);
+        // SÓ subtrai do balance se for receita de assessoria (não comissão BV)
+        if (finalRevenueType === 'assessoria' && String(bride_id) !== '58') {
+            const { data: bride } = await supabase.from("brides").select("balance").eq("id", bride_id).single();
+
+            if (bride) {
+                const newBalance = Math.max(0, (bride.balance || 0) - paidAmount);
+                await supabase.from("brides").update({ balance: newBalance }).eq("id", bride_id);
+            }
         }
     }
 

@@ -75,6 +75,7 @@ interface Payment {
   amount_paid: number;
   payment_date: string;
   status: string;
+  revenue_type?: 'assessoria' | 'bv';
 }
 
 interface Expense {
@@ -1966,11 +1967,12 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Todos');
   const [partnerFilter, setPartnerFilter] = useState('Todos');
+  const [brideFilter, setBrideFilter] = useState('Todos');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   // Filtragem dos lançamentos recentes
   const allItems = [
     ...payments.map(p => ({ ...p, isExpense: false })),
-    ...expenses.map(e => ({ ...e, bride_name: `Despesa: ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date }))
+    ...expenses.map(e => ({ ...e, bride_name: `Despesa: ${e.category}`, isExpense: true, amount_paid: e.amount, payment_date: e.date, bride_id: null }))
   ];
   const filteredItems = allItems
     .filter(item => {
@@ -1982,6 +1984,8 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
       const partnerMatch = partnerFilter === 'Todos' ||
         item.description?.toLowerCase().includes(partnerFilter.toLowerCase()) ||
         (item as any).partner_name === partnerFilter;
+      // Filtro de cliente
+      const brideMatch = brideFilter === 'Todos' || String(item.bride_id) === brideFilter;
       // Filtro de data
       let dateMatch = true;
       const itemDate = parseDate(item.payment_date) || new Date();
@@ -2006,7 +2010,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
           dateMatch = true;
         }
       }
-      return searchMatch && typeMatch && dateMatch;
+      return searchMatch && typeMatch && dateMatch && partnerMatch && brideMatch;
     })
     .sort((a, b) => (parseDate(b.payment_date)?.getTime() || 0) - (parseDate(a.payment_date)?.getTime() || 0));
   const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
@@ -2170,8 +2174,27 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cliente / Evento</label>
+                  <div className="relative">
+                    <select
+                      className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner cursor-pointer"
+                      value={brideFilter}
+                      onChange={(e) => setBrideFilter(e.target.value)}
+                    >
+                      <option value="Todos">Todos os clientes</option>
+                      {[...brides]
+                        .filter(b => b.id !== 58)
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(b => <option key={b.id} value={b.id.toString()}>{b.name}</option>)
+                      }
+                      <option value="58">Geral / Sem Cliente</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
                 <button
-                  onClick={() => { setSearchTerm(''); setTypeFilter('Todos'); setDateFilter('Todos'); setPartnerFilter('Todos'); setCustomStart(''); setCustomEnd(''); }}
+                  onClick={() => { setSearchTerm(''); setTypeFilter('Todos'); setDateFilter('Todos'); setPartnerFilter('Todos'); setBrideFilter('Todos'); setCustomStart(''); setCustomEnd(''); }}
                   className="w-full p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
                   title="Limpar Filtros"
                 >
@@ -2376,7 +2399,8 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
       const isCancellation = selectedBride?.status === 'Cancelado';
 
       onAddPayment({
-        bride_id: isBV ? 58 : formData.bride_id,
+        bride_id: isBV ? (formData.bride_id || 58) : formData.bride_id,
+        revenue_type: isBV ? 'bv' : 'assessoria',
         description: isBV
           ? `[BV] ${formData.partner_name} - ${formData.description}`
           : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
@@ -2494,27 +2518,48 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
                   </select>
                 </div>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro / Fornecedor</label>
-                  <select
-                    required
-                    value={formData.partner_name}
-                    onChange={(e) => {
-                      if (e.target.value === 'NEW_PARTNER') {
-                        onGoToSettings();
-                      } else {
-                        setFormData({ ...formData, partner_name: e.target.value });
-                      }
-                    }}
-                    className="w-full rounded-xl border-none bg-emerald-50/30 text-sm p-4 focus:ring-2 focus:ring-emerald-500/20 font-bold shadow-inner"
-                  >
-                    <option value="">Selecione um parceiro...</option>
-                    {[...(partners || [])].sort((a, b) => a.localeCompare(b)).map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                    <option value="NEW_PARTNER" className="font-black text-emerald-600 bg-emerald-50 italic">➕ Cadastrar Novo Fornecedor...</option>
-                  </select>
-                </div>
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro / Fornecedor</label>
+                    <select
+                      required
+                      value={formData.partner_name}
+                      onChange={(e) => {
+                        if (e.target.value === 'NEW_PARTNER') {
+                          onGoToSettings();
+                        } else {
+                          setFormData({ ...formData, partner_name: e.target.value });
+                        }
+                      }}
+                      className="w-full rounded-xl border-none bg-emerald-50/30 text-sm p-4 focus:ring-2 focus:ring-emerald-500/20 font-bold shadow-inner"
+                    >
+                      <option value="">Selecione um parceiro...</option>
+                      {[...(partners || [])].sort((a, b) => a.localeCompare(b)).map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                      <option value="NEW_PARTNER" className="font-black text-emerald-600 bg-emerald-50 italic">➕ Cadastrar Novo Fornecedor...</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 mt-2 transition-all">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vincular a Cliente (Opcional)</label>
+                    <select
+                      value={formData.bride_id}
+                      onChange={(e) => setFormData({ ...formData, bride_id: e.target.value })}
+                      className="w-full rounded-xl border-dashed border-2 border-emerald-500/10 bg-slate-50/50 text-xs p-3 focus:ring-2 focus:ring-emerald-500/10 font-bold"
+                    >
+                      <option value="">Geral (Sem cliente específico)</option>
+                      {[...brides]
+                        .filter(b => b.id !== 58)
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </>
               )
             )}
             <div className="flex flex-col gap-1.5">
