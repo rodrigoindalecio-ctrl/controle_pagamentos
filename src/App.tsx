@@ -506,6 +506,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   const [showPendingDetail, setShowPendingDetail] = useState(false);
   const [showContractsModal, setShowContractsModal] = useState(false);
   const [showCancellationsModal, setShowCancellationsModal] = useState(false);
+  const [showBVInMix, setShowBVInMix] = useState(false);
 
   if (!stats) return <div className="flex items-center justify-center h-64 text-slate-400 font-medium italic">Carregando painel...</div>;
 
@@ -561,13 +562,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     if (filterMonth === 'all') return String(year) === filterYear;
     return String(year) === filterYear && String(month) === filterMonth;
   });
-  const mixMap = new Map();
-  contractsInPeriod.forEach(b => {
-    const key = b.service_type || 'Outro';
-    mixMap.set(key, (mixMap.get(key) || 0) + (b.contract_value || 0));
-  });
-  const mixLabels = Array.from(mixMap.keys());
-  const mixData = Array.from(mixMap.values());
+  // Mix de cores para o gráfico
   const mixColors = [
     '#883545', '#F59E42', '#4F46E5', '#10B981', '#F43F5E', '#FACC15', '#6366F1', '#A21CAF', '#0EA5E9', '#F472B6', '#22D3EE', '#A3E635'
   ];
@@ -626,6 +621,57 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     const d = p.payment_date ? new Date(p.payment_date) : null;
     return d && d.getFullYear() === Number(filterYear) && (p.status || '').trim().toLowerCase() === 'pago';
   }).reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+  // --- Mix de Receita (Alinhado 100% com o Card de Receita Principal) ---
+  const mixMap = new Map();
+  const clientsWithRevenueInPeriod = new Set();
+
+  // 1. Pegar todos os pagamentos realizados no período selecionado (Geralmente entradas > 0)
+  const paymentsInPeriod = payments.filter(p => {
+    const d = p.payment_date ? new Date(p.payment_date) : null;
+    if (!d || (p.status || '').trim().toLowerCase() !== 'pago') return false;
+
+    // Helper simples para valor numérico
+    const amount = typeof p.amount_paid === 'number' ? p.amount_paid : parseFloat(String(p.amount_paid).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
+    if (amount <= 0) return false; // Sincroniza com o card de Receita que só mostra entradas
+
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+
+    const matchesYear = String(year) === filterYear;
+    const matchesMonth = filterMonth === 'all' || String(month) === filterMonth;
+
+    return matchesYear && matchesMonth;
+  });
+
+  // 2. Agrupar esses pagamentos por tipo de serviço do cliente
+  paymentsInPeriod.forEach(p => {
+    const amount = typeof p.amount_paid === 'number' ? p.amount_paid : parseFloat(String(p.amount_paid).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
+
+    if (String(p.bride_id) === '58') {
+      if (showBVInMix) {
+        clientsWithRevenueInPeriod.add('BV');
+        const key = 'BV (Bonificação)';
+        mixMap.set(key, (mixMap.get(key) || 0) + amount);
+      }
+    } else {
+      const bride = brides.find(b => String(b.id) === String(p.bride_id));
+      if (bride) {
+        clientsWithRevenueInPeriod.add(bride.id);
+        const rawKey = (bride.service_type || 'Não Definido').trim();
+        const key = rawKey || 'Não Definido';
+        mixMap.set(key, (mixMap.get(key) || 0) + amount);
+      } else {
+        // Se o cliente foi apagado mas existe pagamento, agrupar em 'Outro (Recebimentos de IDs excluídos)'
+        const key = 'Outro (IDs excluídos)';
+        mixMap.set(key, (mixMap.get(key) || 0) + amount);
+      }
+    }
+  });
+
+  const mixLabels = Array.from(mixMap.keys());
+  const mixData = Array.from(mixMap.values());
+  const totalMixValue = Array.from(mixMap.values()).reduce((a, b) => a + b, 0);
 
   // Ghost Lines: comparativo de receita por mês para o ano atual + 1 anterior
   const ghostYears = [String(currentYear - 1), String(currentYear)];
@@ -956,11 +1002,20 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         <div className="p-5 lg:p-8 border-b border-[#883545]/5 flex items-center justify-between">
           <div>
             <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Mix de Receita por Serviço</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Contratos ativos e concluídos no período</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Distribuição baseada em recebimentos de caixa no período</p>
           </div>
-          <span className="text-[10px] font-black text-[#883545] bg-[#883545]/5 px-3 py-1.5 rounded-full uppercase tracking-widest">
-            {contractsInPeriod.length} contratos
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowBVInMix(!showBVInMix)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${showBVInMix ? 'bg-[#883545] text-white border-[#883545]' : 'bg-white text-slate-400 border-slate-200 hover:border-[#883545]/30'}`}
+            >
+              <div className={`w-2 h-2 rounded-full ${showBVInMix ? 'bg-white animate-pulse' : 'bg-slate-300'}`} />
+              <span className="text-[9px] font-black uppercase tracking-widest">Incluir BV</span>
+            </button>
+            <span className="text-[10px] font-black text-[#883545] bg-[#883545]/5 px-3 py-1.5 rounded-full uppercase tracking-widest">
+              {clientsWithRevenueInPeriod.size} Clientes Recebidos
+            </span>
+          </div>
         </div>
 
         {mixLabels.length > 0 ? (
@@ -977,7 +1032,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
             {/* Lista ranqueada à direita */}
             <div className="flex-1 p-6 lg:p-8 space-y-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Ranking por Valor de Contrato</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Ranking por Receita Gerada</p>
               {(() => {
                 const total = mixData.reduce((s, v) => s + v, 0);
                 const sorted = mixLabels
@@ -1000,7 +1055,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="text-[10px] font-black text-slate-400">{pct.toFixed(1)}%</span>
                           <span className="text-sm font-black text-slate-800">
-                            R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
@@ -1020,7 +1075,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
               <div className="pt-4 mt-2 border-t border-slate-100 flex justify-between items-center">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</span>
                 <span className="text-base font-black text-[#883545]">
-                  R$ {mixData.reduce((s, v) => s + v, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {mixData.reduce((s, v) => s + v, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -1889,8 +1944,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
       }
       return searchMatch && typeMatch && dateMatch;
     })
-    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
-    .slice(0, 30);
+    .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
   const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
