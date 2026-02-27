@@ -169,7 +169,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     logo: "",
     description: "Gestão Premium"
   },
-  services: ["Assessoria do Dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
+  services: ["Assessoria do dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
   partners: ["Papelaria Modelo", "Buffet X", "Uber", "Freelancer"],
   goals: {
     annualRevenue: 100000,
