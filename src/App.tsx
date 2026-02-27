@@ -3557,6 +3557,12 @@ export default function App() {
     fetchData();
   }, [filterYear, filterMonth]);
 
+  useEffect(() => {
+    if (authToken) {
+      fetchData();
+    }
+  }, [authToken]);
+
   const handleSaveBride = async (brideData: any) => {
     try {
       const url = brideToEdit ? `/api/brides/${brideToEdit.id}` : '/api/brides';
