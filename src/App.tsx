@@ -3406,6 +3406,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isPublicBrandingLoaded, setIsPublicBrandingLoaded] = useState(false);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
 
@@ -3471,7 +3472,7 @@ export default function App() {
 
   useEffect(() => {
     // Busca informações públicas de branding (para guia anônima/primeiro acesso)
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !isPublicBrandingLoaded) {
       fetch('/api/public/settings')
         .then(res => res.json())
         .then(data => {
@@ -3482,18 +3483,25 @@ export default function App() {
             }));
           }
         })
-        .catch(() => { });
+        .finally(() => {
+          setIsPublicBrandingLoaded(true);
+          // Se não está autenticado, o loading termina aqui
+          setIsInitialLoading(false);
+        });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isPublicBrandingLoaded]);
 
   useEffect(() => {
-    // A tela de loading agora é controlada pelo fetchData ou cache
-    // Se já temos cache, podemos liberar o loading mais rápido
+    // A tela de loading agora é controlada pelo fetchData ou fetchPublicBranding
+    // Se já temos cache, podemos liberar o loading mais rápido para estética
     const hasCache = localStorage.getItem('wedding_stats') !== null;
     if (hasCache) {
-      const timer = setTimeout(() => setIsInitialLoading(false), 1500); // Mínimo para estética
+      const timer = setTimeout(() => {
+        setIsInitialLoading(false);
+      }, 1500);
       return () => clearTimeout(timer);
     }
+    // Se não tem cache, o loading fica preso até o fetch terminar (feita nos effects acima)
   }, []);
 
   useEffect(() => {
