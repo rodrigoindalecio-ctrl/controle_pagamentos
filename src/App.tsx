@@ -1492,7 +1492,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
       .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
     return {
       totalPaid,
-      balance: bride.balance
+      balance: Math.max(0, (Number(bride.contract_value) || 0) - totalPaid)
     };
   };
 

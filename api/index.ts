@@ -555,6 +555,43 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     }
 });
 
+const pureNum = (val: any) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    let s = val.toString().replace(/[R$\s]/g, '');
+    if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.includes(',')) s = s.replace(',', '.');
+    return parseFloat(s) || 0;
+};
+
+// Helper function to keep balance in sync based on ALL payments
+const refreshBrideBalance = async (brideId: any) => {
+    if (!brideId || String(brideId) === '58') return;
+
+    // 1. Get all paid assessoria payments for this bride
+    const { data: payments } = await supabase
+        .from("payments")
+        .select("amount_paid")
+        .eq("bride_id", brideId)
+        .ilike("status", "pago")
+        .eq("revenue_type", "assessoria");
+
+    const totalPaid = (payments || []).reduce((sum, p) => sum + pureNum(p.amount_paid), 0);
+
+    // 2. Get bride contract value
+    const { data: bride } = await supabase
+        .from("brides")
+        .select("contract_value, status")
+        .eq("id", brideId)
+        .single();
+
+    if (bride) {
+        // Se cancelado, o contract_value já é o valor da multa
+        const newBalance = Math.max(0, pureNum(bride.contract_value) - totalPaid);
+        await supabase.from("brides").update({ balance: newBalance }).eq("id", brideId);
+    }
+};
+
 app.get("/api/brides", requireAuth, async (req, res) => {
     const { data, error } = await supabase
         .from("brides")
@@ -568,14 +605,6 @@ app.get("/api/brides", requireAuth, async (req, res) => {
 app.post("/api/brides", requireAuth, async (req, res) => {
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
     // Initial balance is the contract value
-    const pureNum = (val: any) => {
-        if (typeof val === 'number') return val;
-        if (!val) return 0;
-        let s = val.toString().replace(/[R$\s]/g, '');
-        if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
-        else if (s.includes(',')) s = s.replace(',', '.');
-        return parseFloat(s) || 0;
-    };
     const cv = pureNum(contract_value);
     const ov = pureNum(original_value);
     const initialBalance = cv || ov || 0;
@@ -666,27 +695,10 @@ app.post("/api/payments", requireAuth, async (req, res) => {
         return res.status(500).json(error);
     }
 
-    // 2. If the payment is 'Pago', subtract from the bride's balance
+    // 2. If the payment is 'Pago', refresh the bride's balance
     if ((status || 'Pago').trim().toLowerCase() === 'pago') {
-        const pureNum = (val: any) => {
-            if (typeof val === 'number') return val;
-            if (!val) return 0;
-            let s = val.toString().replace(/[R$\s]/g, '');
-            if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
-            else if (s.includes(',')) s = s.replace(',', '.');
-            return parseFloat(s) || 0;
-        };
-
-        const paidAmount = pureNum(amount_paid);
-
-        // SÓ subtrai do balance se for receita de assessoria (não comissão BV)
         if (finalRevenueType === 'assessoria' && String(bride_id) !== '58') {
-            const { data: bride } = await supabase.from("brides").select("balance").eq("id", bride_id).single();
-
-            if (bride) {
-                const newBalance = Math.max(0, (bride.balance || 0) - paidAmount);
-                await supabase.from("brides").update({ balance: newBalance }).eq("id", bride_id);
-            }
+            await refreshBrideBalance(bride_id);
         }
     }
 
@@ -762,15 +774,6 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
 
-    const pureNum = (val: any) => {
-        if (typeof val === 'number') return val;
-        if (!val) return 0;
-        let s = val.toString().replace(/[R$\s]/g, '');
-        if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
-        else if (s.includes(',')) s = s.replace(',', '.');
-        return parseFloat(s) || 0;
-    };
-
     const { error } = await supabase
         .from("brides")
         .update({
@@ -784,7 +787,14 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
         })
         .eq("id", id);
 
-    if (error) return res.status(500).json(error);
+    if (error) {
+        console.error("Update bride error:", error);
+        return res.status(500).json(error);
+    }
+
+    // Recalcula o saldo pois o valor do contrato pode ter mudado
+    await refreshBrideBalance(id);
+
     res.json({ success: true });
 });
 
