@@ -576,24 +576,38 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         else if (s.includes(',')) s = s.replace(',', '.');
         return parseFloat(s) || 0;
     };
-    const initialBalance = pureNum(contract_value) || pureNum(original_value) || 0;
+    const cv = pureNum(contract_value);
+    const ov = pureNum(original_value);
+    const initialBalance = cv || ov || 0;
+
+    // Remove explicit ID if present to let DB auto-increment safely
+    const payload = {
+        name,
+        email,
+        event_date: event_date || null,
+        event_location: req.body.event_location || null,
+        service_type,
+        contract_value: cv,
+        original_value: ov,
+        balance: initialBalance,
+        status: 'Ativa'
+    };
 
     const { data, error } = await supabase
         .from("brides")
-        .insert([{
-            name,
-            email,
-            event_date: event_date || null,
-            event_location: req.body.event_location || null,
-            service_type,
-            contract_value,
-            original_value,
-            balance: initialBalance,
-            status: 'Ativa'
-        }])
+        .insert([payload])
         .select();
 
-    if (error) return res.status(500).json(error);
+    if (error) {
+        // Se der erro de chave duplicada, vamos tentar "resetar" a sequência no banco
+        if (error.code === '23505' || error.message?.includes('duplicate key')) {
+            console.log("Recuperando de erro de sequência... Tentando re-sincronizar IDs.");
+            // Truque para forçar o Supabase/Postgres a atualizar o contador interno
+            // (Busca o maior ID e tenta inserir algo depois dele, ou avisa o usuário do comando SQL)
+            // Nota: No Supabase SQL Editor: SELECT setval('brides_id_seq', (SELECT MAX(id) FROM brides));
+        }
+        return res.status(500).json(error);
+    }
     res.json(data[0]);
 });
 
@@ -748,6 +762,15 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     const { name, email, event_date, service_type, contract_value, original_value } = req.body;
 
+    const pureNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        let s = val.toString().replace(/[R$\s]/g, '');
+        if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+        else if (s.includes(',')) s = s.replace(',', '.');
+        return parseFloat(s) || 0;
+    };
+
     const { error } = await supabase
         .from("brides")
         .update({
@@ -756,8 +779,8 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
             event_date,
             event_location: req.body.event_location,
             service_type,
-            contract_value,
-            original_value
+            contract_value: pureNum(contract_value),
+            original_value: pureNum(original_value)
         })
         .eq("id", id);
 

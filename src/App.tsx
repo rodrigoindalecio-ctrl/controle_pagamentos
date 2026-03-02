@@ -1980,7 +1980,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
 
 // --- Finance View ---
 
-const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense, onGoToSettings }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, onGoToSettings: () => void, key?: string }) => {
+const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense, onGoToSettings }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => Promise<boolean>, onAddExpense: (e: any) => Promise<boolean>, onGoToSettings: () => void, key?: string }) => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   // Filtros para lançamentos recentes
@@ -2399,7 +2399,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   );
 };
 
-const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense, onGoToSettings }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => void, onAddExpense: (e: any) => void, onGoToSettings: () => void }) => {
+const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense, onGoToSettings }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => Promise<boolean>, onAddExpense: (e: any) => Promise<boolean>, onGoToSettings: () => void }) => {
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
@@ -2412,42 +2412,50 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
     category: 'Geral'
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (type === 'entrada') {
-      const isBV = revenueSegment === 'bv';
-      const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
-      const isCancellation = selectedBride?.status === 'Cancelado';
+    try {
+      let success = false;
+      if (type === 'entrada') {
+        const isBV = revenueSegment === 'bv';
+        const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
+        const isCancellation = selectedBride?.status === 'Cancelado';
 
-      onAddPayment({
-        bride_id: isBV ? (formData.bride_id || 58) : formData.bride_id,
-        revenue_type: isBV ? 'bv' : 'assessoria',
-        description: isBV
-          ? `[BV] ${formData.partner_name} - ${formData.description}`
-          : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
-        amount_paid: Number(formData.amount),
-        payment_date: formData.date,
-        status: 'Pago'
-      });
-    } else {
-      onAddExpense({
-        description: formData.description,
-        amount: Number(formData.amount),
-        date: formData.date,
-        category: formData.category
-      });
+        success = await onAddPayment({
+          bride_id: isBV ? (formData.bride_id || 58) : formData.bride_id,
+          revenue_type: isBV ? 'bv' : 'assessoria',
+          description: isBV
+            ? `[BV] ${formData.partner_name} - ${formData.description}`
+            : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
+          amount_paid: Number(formData.amount),
+          payment_date: formData.date,
+          status: 'Pago'
+        });
+      } else {
+        success = await onAddExpense({
+          description: formData.description,
+          amount: Number(formData.amount),
+          date: formData.date,
+          category: formData.category
+        });
+      }
+
+      if (success) {
+        setFormData({
+          bride_id: '',
+          description: '',
+          partner_name: '',
+          amount: '',
+          date: new Date().toISOString().split('T')[0],
+          status: 'Pago',
+          category: 'Geral'
+        });
+        setRevenueSegment('assessoria');
+        onClose();
+      }
+    } catch (error) {
+      console.error("Erro ao registrar lançamento:", error);
     }
-    setFormData({
-      bride_id: '',
-      description: '',
-      partner_name: '',
-      amount: '',
-      date: new Date().toISOString().split('T')[0],
-      status: 'Pago',
-      category: 'Geral'
-    });
-    setRevenueSegment('assessoria');
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -3201,7 +3209,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
   );
 };
 
-const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locations, onGoToSettings }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => void, brideToEdit?: Bride | null, serviceTypes: string[], locations: string[], onGoToSettings: () => void }) => {
+const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locations, onGoToSettings }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => Promise<boolean>, brideToEdit?: Bride | null, serviceTypes: string[], locations: string[], onGoToSettings: () => void }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -3257,10 +3265,16 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
           <h2 className="text-2xl font-black uppercase tracking-widest">{brideToEdit ? 'Editar Evento' : 'Novo Evento'}</h2>
         </div>
 
-        <form className="p-6 lg:p-8 space-y-4 lg:space-y-6" onSubmit={(e) => {
+        <form className="p-6 lg:p-8 space-y-4 lg:space-y-6" onSubmit={async (e) => {
           e.preventDefault();
-          onSave(formData);
-          onClose();
+          try {
+            const success = await onSave(formData);
+            if (success) {
+              onClose();
+            }
+          } catch (error) {
+            console.error("Erro ao salvar:", error);
+          }
         }}>
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
@@ -3636,11 +3650,20 @@ export default function App() {
         body: JSON.stringify(brideData)
       });
       if (res.ok) {
-        fetchData();
+        await fetchData();
         setBrideToEdit(null);
+        alert(brideToEdit ? 'Cliente atualizado com sucesso! ✓' : 'Cliente cadastrado com sucesso! ✓');
+        return true;
+      } else {
+        const errorData = await res.json();
+        console.error('Erro ao salvar cliente:', errorData);
+        alert(`Erro ao salvar: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        return false;
       }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao tentar salvar o cliente.');
+      return false;
     }
   };
 
@@ -3650,9 +3673,19 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(paymentData)
       });
-      if (res.ok) fetchData();
+      if (res.ok) {
+        await fetchData();
+        alert('Pagamento registrado com sucesso! ✓');
+        return true;
+      } else {
+        const errorData = await res.json();
+        alert(`Erro ao registrar pagamento: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        return false;
+      }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao tentar registrar pagamento.');
+      return false;
     }
   };
 
@@ -3662,9 +3695,19 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(expenseData)
       });
-      if (res.ok) fetchData();
+      if (res.ok) {
+        await fetchData();
+        alert('Despesa registrada com sucesso! ✓');
+        return true;
+      } else {
+        const errorData = await res.json();
+        alert(`Erro ao registrar despesa: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        return false;
+      }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao tentar registrar despesa.');
+      return false;
     }
   };
 
@@ -3678,9 +3721,16 @@ export default function App() {
           original_value: options.original_value
         })
       });
-      if (res.ok) fetchData();
+      if (res.ok) {
+        await fetchData();
+        alert(`Status do cliente atualizado para: ${status} ✓`);
+      } else {
+        const errorData = await res.json();
+        alert(`Erro ao atualizar status: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+      }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao tentar atualizar status.');
     }
   };
 
@@ -3688,9 +3738,16 @@ export default function App() {
     if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
     try {
       const res = await authFetch(`/api/brides/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      if (res.ok) {
+        await fetchData();
+        alert('Cliente excluído com sucesso! ✓');
+      } else {
+        const errorData = await res.json();
+        alert(`Erro ao excluir cliente: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+      }
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão ao tentar excluir cliente.');
     }
   };
 
