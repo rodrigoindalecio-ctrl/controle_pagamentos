@@ -3795,7 +3795,6 @@ export default function App() {
         });
       }
     } catch (_) { /* ignora erros de rede no logout */ }
-    sessionStorage.removeItem('wedding_token'); // Limpa legados se houver
     localStorage.removeItem('wedding_token');
     localStorage.removeItem('wedding_refresh_token');
     setAuthToken(null);
