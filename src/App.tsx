@@ -3387,8 +3387,8 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
 export default function App() {
   const mainContentRef = React.useRef<HTMLDivElement>(null);
 
-  // Autenticação: token fica em sessionStorage (apagado ao fechar o browser)
-  const [authToken, setAuthToken] = useState<string | null>(() => sessionStorage.getItem('wedding_token'));
+  // Autenticação: token fica em localStorage para persistir entre sessões (mesmo fechando o browser)
+  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('wedding_token'));
   const isAuthenticated = !!authToken;
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -3467,7 +3467,7 @@ export default function App() {
 
     // Se token expirou, tenta renovar com refresh token
     if (res.status === 401) {
-      const refreshToken = sessionStorage.getItem('wedding_refresh_token');
+      const refreshToken = localStorage.getItem('wedding_refresh_token');
       if (refreshToken) {
         const refreshRes = await fetch('/api/auth/refresh', {
           method: 'POST',
@@ -3476,8 +3476,8 @@ export default function App() {
         });
         if (refreshRes.ok) {
           const refreshData = await refreshRes.json();
-          sessionStorage.setItem('wedding_token', refreshData.access_token);
-          sessionStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
+          localStorage.setItem('wedding_token', refreshData.access_token);
+          localStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
           setAuthToken(refreshData.access_token);
           // Retry a requisição original com novo token
           headers['Authorization'] = `Bearer ${refreshData.access_token}`;
@@ -3795,8 +3795,9 @@ export default function App() {
         });
       }
     } catch (_) { /* ignora erros de rede no logout */ }
-    sessionStorage.removeItem('wedding_token');
-    sessionStorage.removeItem('wedding_refresh_token');
+    sessionStorage.removeItem('wedding_token'); // Limpa legados se houver
+    localStorage.removeItem('wedding_token');
+    localStorage.removeItem('wedding_refresh_token');
     setAuthToken(null);
     setHasUnsavedSettings(false);
     setActiveTab('dashboard');
@@ -3869,9 +3870,9 @@ export default function App() {
             <LoginView
               key="login"
               onLogin={(user, token, refreshToken) => {
-                // Salva token no sessionStorage (desaparece ao fechar o browser)
-                sessionStorage.setItem('wedding_token', token);
-                sessionStorage.setItem('wedding_refresh_token', refreshToken);
+                // Salva token no localStorage (mantém o acesso mesmo após fechar o browser)
+                localStorage.setItem('wedding_token', token);
+                localStorage.setItem('wedding_refresh_token', refreshToken);
                 setAuthToken(token);
                 setUserProfile({ name: user.name, email: user.email }); // sem senha
                 setActiveTab('dashboard');
