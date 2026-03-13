@@ -605,7 +605,7 @@ app.get("/api/brides", requireAuth, async (req, res) => {
 });
 
 app.post("/api/brides", requireAuth, async (req, res) => {
-    const { 
+    const {
         name, email, event_date, service_type, contract_value, original_value,
         cpf, rg, birth_date, address, phone_number, neighborhood, city, state, zip_code,
         spouse_name, event_start_time, event_end_time, event_location, signer_type,
@@ -633,9 +633,9 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         neighborhood, city, state, zip_code,
         spouse_name, event_start_time, event_end_time, signer_type,
         marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
-        event_address, has_different_locations, reception_location, reception_address, 
+        event_address, has_different_locations, reception_location, reception_address,
         guest_count: guest_count !== "" && guest_count !== null ? parseInt(guest_count, 10) : null,
-        address_number, address_complement, 
+        address_number, address_complement,
         extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null
     };
 
@@ -836,7 +836,7 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
         return res.status(500).json(error);
     }
 
-    // Recalcula o saldo pois o valor do contrato pode ter mudado
+    // Recalcula o saldo pois o valor do contrato pode ter mudado ... 
     await refreshBrideBalance(id);
 
     res.json({ success: true });
@@ -900,7 +900,7 @@ app.post("/api/contracts/preview", requireAuth, async (req, res) => {
             const { data: template } = await supabase.from("contract_templates").select("template_text").eq("id", template_id).single();
             textToRender = template?.template_text;
         }
-        
+
         const rendered = await zapsignService.renderTemplate(textToRender, bride_id);
         res.json({ rendered });
     } catch (err: any) {
@@ -926,7 +926,7 @@ app.post("/api/contracts/:id/send", requireAuth, async (req, res) => {
     const { signer_type } = req.body; // 'noiva' ou 'noivo'
     const user = (req as any).user;
     const userSettings = user?.user_metadata?.app_settings || {};
-    
+
     console.log(`[ZapSign] Iniciando envio do contrato ${id} para o usuário: ${user?.email}`);
     console.log(`[ZapSign] Configurações encontradas:`, { hasToken: !!userSettings.zapsignToken, isSandbox: userSettings.isSandbox });
 
