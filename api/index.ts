@@ -953,14 +953,6 @@ app.get("/api/contracts", requireAuth, async (req, res) => {
 
 export default app;
 
-export const config = {
-    api: {
-        bodyParser: {
-            sizeLimit: '10mb',
-        },
-    },
-};
-
 // Função para iniciar o servidor (usada localmente)
 export async function startServer() {
     const rootDir = path.resolve(__dirname, "..");
