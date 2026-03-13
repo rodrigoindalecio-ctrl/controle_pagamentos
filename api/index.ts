@@ -2,10 +2,14 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
-import * as dotenv from "dotenv";
+import dotenv from "dotenv";
 import { zapsignService } from "./zapsignService";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Cliente padrão (anon) para operações de dados
 const supabase = createClient(
     process.env.SUPABASE_URL || "",
@@ -19,8 +23,7 @@ const supabaseAdmin = createClient(
 );
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json());
 
 // --- Middleware de Autenticação ---
 const requireAuth = async (req: any, res: any, next: any) => {
