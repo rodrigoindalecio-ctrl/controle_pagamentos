@@ -632,8 +632,10 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         neighborhood, city, state, zip_code,
         spouse_name, event_start_time, event_end_time, signer_type,
         marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
-        event_address, has_different_locations, reception_location, reception_address, guest_count,
-        address_number, address_complement, extra_hour_value
+        event_address, has_different_locations, reception_location, reception_address, 
+        guest_count: guest_count !== "" && guest_count !== null ? parseInt(guest_count, 10) : null,
+        address_number, address_complement, 
+        extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null
     };
 
     const { data, error } = await supabase
@@ -793,13 +795,14 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
         .update({
             name,
             email,
-            event_date,
-            event_location: req.body.event_location,
+            event_date: event_date || null,
+            event_location: req.body.event_location || null,
             service_type,
             contract_value: pureNum(contract_value),
             original_value: pureNum(original_value),
             cpf: req.body.cpf,
             rg: req.body.rg,
+            birth_date: req.body.birth_date || null,
             spouse_name: req.body.spouse_name,
             phone_number: req.body.phone_number,
             event_start_time: req.body.event_start_time,
@@ -820,10 +823,10 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
             has_different_locations: req.body.has_different_locations,
             reception_location: req.body.reception_location,
             reception_address: req.body.reception_address,
-            guest_count: req.body.guest_count,
+            guest_count: req.body.guest_count !== "" && req.body.guest_count !== null ? parseInt(req.body.guest_count, 10) : null,
             address_number: req.body.address_number,
             address_complement: req.body.address_complement,
-            extra_hour_value: req.body.extra_hour_value
+            extra_hour_value: req.body.extra_hour_value !== undefined ? pureNum(req.body.extra_hour_value) : null
         })
         .eq("id", id);
 

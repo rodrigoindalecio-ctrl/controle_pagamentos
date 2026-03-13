@@ -4557,9 +4557,9 @@ export default function App() {
         alert(`Erro ao salvar: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
         return null;
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao tentar salvar o cliente.');
+    } catch (e: any) {
+      console.error('[handleSaveBride Error]', e);
+      alert(`Erro inesperado ao salvar: ${e.message}`);
       return null;
     }
   };
