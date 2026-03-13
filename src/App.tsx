@@ -47,7 +47,13 @@ import {
   ShieldCheck,
   Sparkles,
   MapPin,
-  X
+  X,
+  FileText,
+  Send,
+  ExternalLink,
+  Copy,
+  ChevronRight,
+  Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -65,6 +71,51 @@ interface Bride {
   original_value: number;
   balance: number;
   event_location: string;
+  cpf?: string;
+  rg?: string;
+  birth_date?: string;
+  address?: string;
+  phone_number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  spouse_name?: string;
+  event_start_time?: string;
+  event_end_time?: string;
+  marital_status?: string;
+  profession?: string;
+  nationality?: string;
+  couple_type?: 'tradicional' | 'noivas' | 'noivos';
+  spouse_cpf?: string;
+  spouse_rg?: string;
+  event_address?: string;
+  has_different_locations?: boolean;
+  reception_location?: string;
+  reception_address?: string;
+  guest_count?: string | number;
+  address_number?: string;
+  address_complement?: string;
+  extra_hour_value?: number;
+}
+
+interface Contract {
+  id: number;
+  bride_id: number;
+  template_id: number;
+  status: string;
+  generated_text: string;
+  zapsign_doc_id?: string;
+  sign_url_admin?: string;
+  sign_url_client?: string;
+  signed_pdf_url?: string;
+  created_at: string;
+}
+
+interface ContractTemplate {
+  id: number;
+  name: string;
+  template_text: string;
 }
 
 interface Payment {
@@ -154,7 +205,7 @@ interface AppSettings {
   };
   services: string[];
   partners: string[];
-  locations: string[];
+  locations: { name: string; address: string }[];
   goals: {
     annualRevenue: number;
     fineThresholdDays: number;
@@ -165,6 +216,9 @@ interface AppSettings {
     darkMode: boolean;
     compactMode: boolean;
   };
+  extraHourRate: number;
+  zapsignToken: string;
+  isSandbox: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -175,7 +229,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   services: ["Assessoria do dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
   partners: ["Papelaria Modelo", "Buffet X", "Uber", "Freelancer"],
-  locations: ["Espaço Villa Lobos", "Buffet Torres", "Fazenda Vila Rica"],
+  locations: [
+    { name: "Espaço Villa Lobos", address: "" },
+    { name: "Buffet Torres", address: "" },
+    { name: "Fazenda Vila Rica", address: "" }
+  ],
   goals: {
     annualRevenue: 100000,
     fineThresholdDays: 30,
@@ -185,7 +243,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   ui: {
     darkMode: false,
     compactMode: false
-  }
+  },
+  extraHourRate: 300,
+  zapsignToken: '',
+  isSandbox: true
 };
 
 // Implementação mínima de StatCard
@@ -1475,7 +1536,185 @@ const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments, goals }: {
   );
 };
 
-const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, key?: string }) => {
+const ContractModal = ({ isOpen, onClose, bride, authFetch }: { isOpen: boolean, onClose: () => void, bride: Bride | null, authFetch: any }) => {
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [previewText, setPreviewText] = useState('');
+  const [isRendering, setIsRendering] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [step, setStep] = useState<'select' | 'preview' | 'sent'>('select');
+  const [signerType, setSignerType] = useState<'noiva' | 'noivo'>('noiva');
+
+  useEffect(() => {
+    if (isOpen && bride) {
+      setStep('select');
+      setPreviewText('');
+      setSignerType((bride as any).signer_type || 'noiva');
+
+      authFetch('/api/contract-templates')
+        .then((res: any) => res.json())
+        .then(data => {
+          setTemplates(data);
+          // Pré-seleção inteligente baseada no Tipo de Serviço
+          if (bride.service_type) {
+            const matched = data.find((t: any) =>
+              t.name.toLowerCase().trim() === bride.service_type.toLowerCase().trim()
+            );
+            if (matched) setSelectedTemplateId(matched.id);
+            else setSelectedTemplateId('');
+          } else {
+            setSelectedTemplateId('');
+          }
+        });
+    }
+  }, [isOpen, bride]);
+
+  const handleGeneratePreview = async () => {
+    if (!selectedTemplateId || !bride) return;
+    setIsRendering(true);
+    try {
+      const res = await authFetch('/api/contracts/preview', {
+        method: 'POST',
+        body: JSON.stringify({ template_id: selectedTemplateId, bride_id: bride.id })
+      });
+      const data = await res.json();
+      setPreviewText(data.rendered);
+      setStep('preview');
+    } catch (err) {
+      alert('Erro ao gerar prévia');
+    } finally {
+      setIsRendering(false);
+    }
+  };
+
+  const handleCreateAndSend = async () => {
+    setIsSending(true);
+    try {
+      const saveRes = await authFetch('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ bride_id: bride?.id, template_id: selectedTemplateId, generated_text: previewText })
+      });
+      const contract = await saveRes.json();
+
+      const sendRes = await authFetch(`/api/contracts/${contract.id}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ signer_type: signerType })
+      });
+      const result = await sendRes.json();
+
+      if (result.sign_url_admin) {
+        window.open(result.sign_url_admin, '_blank');
+        setStep('sent');
+      } else {
+        console.error('[ZapSign Error] Resposta sem link de assinatura:', result);
+        alert(result.error || result.detail || 'Erro desconhecido ao enviar para o ZapSign (Link não gerado)');
+      }
+    } catch (err) {
+      alert('Erro ao enviar contrato');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (!isOpen || !bride) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-[#883545] text-white">
+          <div className="flex items-center gap-3">
+            <FileText className="w-6 h-6" />
+            <div>
+              <h3 className="text-lg font-black uppercase tracking-widest">Gerar Contrato</h3>
+              <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Cliente: {bride.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+            <XCircle className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-6 lg:p-8">
+          {step === 'select' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Escolha o Modelo</label>
+                <select
+                  className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold focus:ring-2 focus:ring-[#883545]/20 shadow-inner"
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                >
+                  <option value="">Selecione um template...</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Signatário Identificado</p>
+                  <p className="text-sm font-bold text-slate-700">
+                    {bride.name}
+                  </p>
+                </div>
+                <div className="px-3 py-1 bg-[#883545]/10 text-[#883545] rounded-lg text-[10px] font-black uppercase tracking-widest">
+                  {signerType === 'noiva' ? 'Noiva' : 'Noivo'}
+                </div>
+              </div>
+
+              <button
+                disabled={!selectedTemplateId || isRendering}
+                onClick={handleGeneratePreview}
+                className="w-full py-5 bg-[#883545] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:-translate-y-1 transition-all disabled:opacity-50"
+              >
+                {isRendering ? 'Processando...' : 'Gerar Prévia Editável'}
+              </button>
+            </div>
+          )}
+
+          {step === 'preview' && (
+            <div className="space-y-4 h-full flex flex-col">
+              <div className="flex justify-between items-end">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Confira e Edit se necessário</label>
+                <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-md uppercase tracking-widest">Modo de Edição Ativo</span>
+              </div>
+              <textarea
+                className="flex-1 w-full p-6 bg-slate-50 border-none rounded-2xl font-serif text-slate-700 leading-relaxed shadow-inner min-h-[400px] focus:ring-0"
+                value={previewText}
+                onChange={(e) => setPreviewText(e.target.value)}
+              />
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setStep('select')} className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">Voltar</button>
+                <button
+                  onClick={handleCreateAndSend}
+                  disabled={isSending}
+                  className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSending ? 'Enviando...' : <><Send className="w-4 h-4" /> Finalizar e Enviar para Assinatura</>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'sent' && (
+            <div className="py-20 text-center space-y-6">
+              <div className="size-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle className="w-12 h-12" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-slate-800">Contrato Disponível!</h3>
+                <p className="text-slate-500 max-w-sm mx-auto mt-2">Uma nova aba foi aberta para você realizar a sua assinatura. Após você assinar, o cliente receberá o link automaticamente.</p>
+              </div>
+              <button onClick={onClose} className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Fechar Janela</button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings, authFetch, onNewContract }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, authFetch: any, onNewContract: () => void, key?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Ativa');
   const [yearFilter, setYearFilter] = useState('Todos');
@@ -1483,8 +1722,18 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [localFilter, setLocalFilter] = useState('Todos');
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
-  const [brideForDistrato, setBrideForDistrato] = useState<Bride | null>(null);
+  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [brideForModal, setBrideForModal] = useState<Bride | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenContract = (e: any) => {
+      setBrideForModal(e.detail);
+      setIsContractModalOpen(true);
+    };
+    window.addEventListener('open-contract', handleOpenContract);
+    return () => window.removeEventListener('open-contract', handleOpenContract);
+  }, []);
 
   const calculateBalance = (bride: Bride) => {
     const totalPaid = payments
@@ -1524,6 +1773,14 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
     >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <Header title="Lista de Clientes" subtitle={`Gerencie seus ${brides.filter(b => b.id !== 58).length} clientes ativos e inativos.`} />
+        <div className="hidden md:flex items-center gap-3">
+          <button
+            onClick={onNewContract}
+            className="px-6 py-3 bg-[#883545] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-[#883545]/20 hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <FileText className="w-5 h-5" /> Novo Contrato
+          </button>
+        </div>
       </div>
 
       {/* Sugestão de Filtros */}
@@ -1620,7 +1877,14 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                       onChange={(e) => setLocalFilter(e.target.value)}
                     >
                       <option>Todos</option>
-                      {([...(settings.locations || [])].sort((a, b) => a.localeCompare(b))).map(l => <option key={l} value={l}>{l}</option>)}
+                      {([...(settings.locations || [])].sort((a, b) => {
+                        const nameA = typeof a === 'string' ? a : a.name;
+                        const nameB = typeof b === 'string' ? b : b.name;
+                        return nameA.localeCompare(nameB);
+                      })).map(l => {
+                        const name = typeof l === 'string' ? l : l.name;
+                        return <option key={name} value={name}>{name}</option>;
+                      })}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
@@ -1722,7 +1986,14 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
               onChange={(e) => setLocalFilter(e.target.value)}
             >
               <option>Todos</option>
-              {[...(settings.locations || [])].sort((a, b) => a.localeCompare(b)).map(l => <option key={l} value={l}>{l}</option>)}
+              {([...(settings.locations || [])].sort((a, b) => {
+                const nameA = typeof a === 'string' ? a : a.name;
+                const nameB = typeof b === 'string' ? b : b.name;
+                return nameA.localeCompare(nameB);
+              })).map(l => {
+                const name = typeof l === 'string' ? l : l.name;
+                return <option key={name} value={name}>{name}</option>;
+              })}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
@@ -1776,7 +2047,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                         <button onClick={() => onUpdateStatus(bride.id, 'Inativa')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                           <UserMinus className="w-3.5 h-3.5" /> Inativar
                         </button>
-                        <button onClick={() => { setBrideForDistrato(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                        <button onClick={() => { setBrideForModal(bride); setIsContractModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
+                          <FileText className="w-3.5 h-3.5" /> Gerar Contrato
+                        </button>
+                        <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                           <XCircle className="w-3.5 h-3.5" /> Cancelar
                         </button>
                         <div className="h-px bg-slate-50 my-1" />
@@ -1937,7 +2211,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                             <button onClick={() => { onUpdateStatus(bride.id, 'Inativa'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                               <UserMinus className="w-3.5 h-3.5" /> Inativar
                             </button>
-                            <button onClick={() => { setBrideForDistrato(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
+                            <button onClick={() => { setBrideForModal(bride); setIsContractModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
+                              <FileText className="w-3.5 h-3.5" /> Gerar Contrato
+                            </button>
+                            <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                               <XCircle className="w-3.5 h-3.5" /> Cancelar
                             </button>
                             <div className="h-px bg-slate-50 my-1" />
@@ -1961,18 +2238,24 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
       <DistratoModal
         isOpen={isDistratoModalOpen}
         onClose={() => setIsDistratoModalOpen(false)}
-        bride={brideForDistrato}
+        bride={brideForModal}
         payments={payments}
         goals={settings.goals}
         onConfirm={(fine) => {
-          if (brideForDistrato) {
-            onUpdateStatus(brideForDistrato.id, 'Cancelado', {
+          if (brideForModal) {
+            onUpdateStatus(brideForModal.id, 'Cancelado', {
               fine_amount: fine,
-              original_value: brideForDistrato.contract_value
+              original_value: brideForModal.contract_value
             });
             setIsDistratoModalOpen(false);
           }
         }}
+      />
+      <ContractModal
+        isOpen={isContractModalOpen}
+        onClose={() => setIsContractModalOpen(false)}
+        bride={brideForModal}
+        authFetch={authFetch}
       />
     </motion.div >
   );
@@ -2658,6 +2941,27 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
   const [newPass, setNewPass] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
   const [passMessage, setPassMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isSavingAll, setIsSavingAll] = useState(false);
+
+  const handleSaveAll = async () => {
+    setIsSavingAll(true);
+    try {
+      const s1 = await onSaveSettings(settings);
+      const s2 = await onSaveProfile(userProfile);
+      if (s1 && s2) {
+        localStorage.setItem('wedding_settings', JSON.stringify(settings));
+        localStorage.setItem('wedding_user_profile', JSON.stringify(userProfile));
+        alert('Configurações salvas com sucesso! ✓');
+      } else {
+        alert('Houve um erro ao salvar algumas informações. Verifique sua conexão.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro inesperado ao salvar.');
+    } finally {
+      setIsSavingAll(false);
+    }
+  };
 
   const handleExport = () => {
     const backup = {
@@ -2674,7 +2978,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
     URL.revokeObjectURL(url);
   };
 
-  const addItem = (list: 'services' | 'partners' | 'locations', value: string) => {
+  const addItem = (list: 'services' | 'partners' | 'locations', value: string | { name: string; address: string }) => {
     if (!value) return;
     const currentList = settings[list] || [];
     setSettings({ ...settings, [list]: [...currentList, value] });
@@ -2728,26 +3032,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
         <div className="flex-1 bg-white p-6 lg:p-10 rounded-3xl border border-[#883545]/10 shadow-sm min-h-[500px]">
           {activeTab === 'profile' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Informações Gerais</h3>
-                <button
-                  onClick={async () => {
-                    const s1 = await onSaveSettings(settings);
-                    const s2 = await onSaveProfile(userProfile);
-                    if (s1 && s2) {
-                      localStorage.setItem('wedding_settings', JSON.stringify(settings));
-                      localStorage.setItem('wedding_user_profile', JSON.stringify(userProfile));
-                      alert('Todas as alterações foram salvas no banco de dados! ✓');
-                    } else {
-                      alert('Houve um erro ao salvar algumas informações. Verifique sua conexão.');
-                    }
-                  }}
-                  className="px-8 py-3 bg-[#883545] text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-[#883545]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Salvar Todas as Alterações
-                </button>
-              </div>
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Informações Gerais</h3>
 
               <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 flex items-center gap-6">
                 <div className="size-20 bg-white rounded-2xl shadow-inner border border-slate-100 flex items-center justify-center overflow-hidden relative group">
@@ -2953,18 +3238,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
           {activeTab === 'services' && (
             <div className="space-y-10">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Serviços & Parceiros</h3>
-                <button
-                  onClick={async () => {
-                    const success = await onSaveSettings(settings);
-                    if (success) alert('Serviços e parceiros salvos no banco de dados! ✓');
-                  }}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all"
-                >
-                  Salvar Alterações
-                </button>
-              </div>
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Serviços & Parceiros</h3>
               <section className="space-y-4">
                 <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                   <span className="p-1.5 bg-[#883545]/10 rounded-lg text-[#883545]">
@@ -3058,38 +3332,50 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                   </span>
                   Locais de Evento
                 </h3>
-                <div className="flex gap-2">
-                  <input
-                    id="new-location"
-                    type="text"
-                    placeholder="Ex: Espaço Villa Lobos"
-                    className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        addItem('locations', (e.target as HTMLInputElement).value);
-                        (e.target as HTMLInputElement).value = '';
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('new-location') as HTMLInputElement;
-                      addItem('locations', input.value);
-                      input.value = '';
-                    }}
-                    className="px-6 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest"
-                  >
-                    Add
-                  </button>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      id="new-location-name"
+                      type="text"
+                      placeholder="Nome do Local (Ex: Villa Lobos)"
+                      className="flex-1 p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
+                    />
+                    <input
+                      id="new-location-address"
+                      type="text"
+                      placeholder="Endereço Completo"
+                      className="flex-[2] p-3 bg-slate-50 border-none rounded-xl text-sm font-bold shadow-inner"
+                    />
+                    <button
+                      onClick={() => {
+                        const nameInput = document.getElementById('new-location-name') as HTMLInputElement;
+                        const addrInput = document.getElementById('new-location-address') as HTMLInputElement;
+                        if (nameInput.value) {
+                          addItem('locations', { name: nameInput.value, address: addrInput.value });
+                          nameInput.value = '';
+                          addrInput.value = '';
+                        }
+                      }}
+                      className="px-6 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {(settings.locations || []).map((location, idx) => (
-                    <span key={idx} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-100">
-                      {location}
-                      <button onClick={() => removeItem('locations', idx)} className="hover:text-rose-500 transition-colors">
-                        <Trash2 className="w-3 h-3" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                  {(settings.locations || []).map((loc, idx) => (
+                    <div key={idx} className="flex flex-col p-4 bg-indigo-50 border border-indigo-100 rounded-2xl relative group">
+                      <span className="text-sm font-black text-indigo-900">{typeof loc === 'string' ? loc : loc.name}</span>
+                      {typeof loc !== 'string' && loc.address && (
+                        <span className="text-[10px] font-bold text-indigo-700/60 mt-1 line-clamp-1">{loc.address}</span>
+                      )}
+                      <button
+                        onClick={() => removeItem('locations', idx)}
+                        className="absolute top-2 right-2 p-1.5 bg-white text-rose-500 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    </span>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -3098,18 +3384,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
           {activeTab === 'goals' && (
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Metas & Regras Financeiras</h3>
-                <button
-                  onClick={async () => {
-                    const success = await onSaveSettings(settings);
-                    if (success) alert('Metas e regras salvas com sucesso! ✓');
-                  }}
-                  className="px-6 py-2 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#883545]/20 hover:bg-[#883545]/90 transition-all"
-                >
-                  Salvar Metas
-                </button>
-              </div>
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Metas & Regras Financeiras</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Meta de Faturamento Anual (R$)</label>
@@ -3166,8 +3441,9 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
           {activeTab === 'system' && (
             <div className="space-y-10">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Preferências do Sistema</h3>
+
               <section className="space-y-6">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Preferências do Sistema</h3>
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -3184,6 +3460,40 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                   >
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.ui.compactMode ? 'left-7' : 'left-1'}`} />
                   </button>
+                </div>
+              </section>
+
+              <section className="space-y-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Integração ZapSign</h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Token (ZapSign)</label>
+                    <input
+                      type="password"
+                      placeholder="Cole seu token aqui..."
+                      value={settings.zapsignToken}
+                      onChange={e => setSettings({ ...settings, zapsignToken: e.target.value })}
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner focus:ring-2 focus:ring-[#883545]/20 outline-none"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-amber-900">Modo Sandbox (Testes)</p>
+                        <p className="text-[10px] font-bold text-amber-900/60">Contratos gerados não terão validade jurídica</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSettings({ ...settings, isSandbox: !settings.isSandbox })}
+                      className={`w-12 h-6 rounded-full transition-all relative ${settings.isSandbox ? 'bg-amber-500' : 'bg-slate-300'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.isSandbox ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
                 </div>
               </section>
 
@@ -3205,11 +3515,38 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
           )}
         </div>
       </div>
-    </motion.div >
+
+      {/* Botão Salvar Flutuante */}
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.5, y: 50 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.5, y: 50 }}
+          className="fixed bottom-24 lg:bottom-12 right-6 lg:right-12 z-[100]"
+        >
+          <button
+            onClick={handleSaveAll}
+            disabled={isSavingAll}
+            className="group flex items-center gap-4 px-10 py-5 bg-[#883545] text-white rounded-full font-black text-sm uppercase tracking-widest shadow-2xl shadow-[#883545]/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isSavingAll ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+              />
+            ) : (
+              <Save className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+            )}
+            {isSavingAll ? 'Salvando...' : 'Salvar Alterações'}
+          </button>
+        </motion.div>
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
-const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locations, onGoToSettings }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => Promise<boolean>, brideToEdit?: Bride | null, serviceTypes: string[], locations: string[], onGoToSettings: () => void }) => {
+const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locations, onGoToSettings, isContractFlow }: { isOpen: boolean, onClose: () => void, onSave: (bride: any) => Promise<boolean>, brideToEdit?: Bride | null, serviceTypes: string[], locations: { name: string; address: string }[], onGoToSettings: () => void, isContractFlow?: boolean }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -3217,7 +3554,34 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
     service_type: '',
     event_location: '',
     contract_value: '',
-    original_value: ''
+    original_value: '',
+    cpf: '',
+    rg: '',
+    birth_date: '',
+    address: '',
+    phone_number: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    spouse_name: '',
+    event_start_time: '',
+    event_end_time: '',
+    signer_type: 'noiva' as 'noiva' | 'noivo' | 'ambos',
+    marital_status: 'Solteiro(a)',
+    profession: '',
+    nationality: 'Brasileiro(a)',
+    couple_type: 'tradicional' as 'tradicional' | 'noivas' | 'noivos',
+    spouse_cpf: '',
+    spouse_rg: '',
+    event_address: '',
+    has_different_locations: false,
+    reception_location: '',
+    reception_address: '',
+    guest_count: '',
+    address_number: '',
+    address_complement: '',
+    extra_hour_value: 300
   });
 
   useEffect(() => {
@@ -3229,7 +3593,34 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
         service_type: brideToEdit.service_type || '',
         event_location: brideToEdit.event_location || '',
         contract_value: brideToEdit.contract_value?.toString() || '',
-        original_value: brideToEdit.original_value?.toString() || ''
+        original_value: brideToEdit.original_value?.toString() || '',
+        cpf: brideToEdit.cpf || '',
+        rg: brideToEdit.rg || '',
+        birth_date: brideToEdit.birth_date ? brideToEdit.birth_date.split('T')[0] : '',
+        address: brideToEdit.address || '',
+        phone_number: brideToEdit.phone_number || '',
+        neighborhood: brideToEdit.neighborhood || '',
+        city: brideToEdit.city || '',
+        state: brideToEdit.state || '',
+        zip_code: brideToEdit.zip_code || '',
+        spouse_name: brideToEdit.spouse_name || '',
+        event_start_time: brideToEdit.event_start_time || '',
+        event_end_time: brideToEdit.event_end_time || '',
+        signer_type: (brideToEdit as any).signer_type || 'noiva',
+        marital_status: (brideToEdit as any).marital_status || 'Solteiro(a)',
+        profession: (brideToEdit as any).profession || '',
+        nationality: (brideToEdit as any).nationality || 'Brasileiro(a)',
+        couple_type: (brideToEdit as any).couple_type || 'tradicional',
+        spouse_cpf: (brideToEdit as any).spouse_cpf || '',
+        spouse_rg: (brideToEdit as any).spouse_rg || '',
+        event_address: (brideToEdit as any).event_address || '',
+        has_different_locations: (brideToEdit as any).has_different_locations || false,
+        reception_location: (brideToEdit as any).reception_location || '',
+        reception_address: (brideToEdit as any).reception_address || '',
+        guest_count: (brideToEdit as any).guest_count || '',
+        address_number: (brideToEdit as any).address_number || '',
+        address_complement: (brideToEdit as any).address_complement || '',
+        extra_hour_value: (brideToEdit as any).extra_hour_value || 350
       });
     } else {
       setFormData({
@@ -3239,10 +3630,60 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
         service_type: '',
         event_location: '',
         contract_value: '',
-        original_value: ''
+        original_value: '',
+        cpf: '',
+        rg: '',
+        birth_date: '',
+        address: '',
+        phone_number: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        spouse_name: '',
+        event_start_time: '',
+        event_end_time: '',
+        signer_type: 'noiva',
+        marital_status: 'Solteiro(a)',
+        profession: '',
+        nationality: 'Brasileiro(a)',
+        couple_type: 'tradicional',
+        spouse_cpf: '',
+        spouse_rg: '',
+        event_address: '',
+        has_different_locations: false,
+        reception_location: '',
+        reception_address: '',
+        guest_count: '',
+        address_number: '',
+        address_complement: '',
+        extra_hour_value: 350
       });
     }
   }, [brideToEdit, isOpen]);
+
+  const handleCepChange = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    setFormData(prev => ({ ...prev, zip_code: cep }));
+
+    if (cleanCep.length === 8) {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setFormData(prev => ({
+            ...prev,
+            address: data.logradouro,
+            neighborhood: data.bairro,
+            city: data.localidade,
+            state: data.uf
+          }));
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP:", error);
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -3255,17 +3696,19 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative z-10 overflow-hidden"
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]"
       >
-        <div className="bg-[#883545] p-6 text-white text-center relative">
+        <div className="bg-[#883545] p-6 text-white text-center relative flex-shrink-0">
           <button onClick={onClose} className="absolute right-4 top-4 p-2 hover:bg-white/10 rounded-full transition-colors">
             <XCircle className="w-5 h-5" />
           </button>
           <Heart className="w-10 h-10 mx-auto mb-3 opacity-80" />
-          <h2 className="text-2xl font-black uppercase tracking-widest">{brideToEdit ? 'Editar Evento' : 'Novo Evento'}</h2>
+          <h2 className="text-2xl font-black uppercase tracking-widest">
+            {isContractFlow ? 'Dados do Contrato' : (brideToEdit ? 'Editar Evento' : 'Novo Evento')}
+          </h2>
         </div>
 
-        <form className="p-6 lg:p-8 space-y-4 lg:space-y-6" onSubmit={async (e) => {
+        <form className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-4 lg:space-y-6" onSubmit={async (e) => {
           e.preventDefault();
           try {
             const success = await onSave(formData);
@@ -3276,105 +3719,546 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
             console.error("Erro ao salvar:", error);
           }
         }}>
-          <div className="space-y-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome do Cliente / Casal</label>
-              <input
-                required
-                className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">E-mail</label>
-              <input
-                type="email"
-                placeholder="email@exemplo.com"
-                className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data do Evento</label>
-                <input
-                  required
-                  type="date"
-                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
-                  value={formData.event_date}
-                  onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de Serviço</label>
-                <select
-                  required
-                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
-                  value={formData.service_type}
-                  onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
-                >
-                  <option value="">Selecione o serviço...</option>
-                  {([...(serviceTypes || [])].sort((a, b) => a.localeCompare(b))).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Local do Evento</label>
-              <select
-                className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
-                value={formData.event_location}
-                onChange={(e) => {
-                  if (e.target.value === 'NEW_LOCATION') {
-                    onGoToSettings();
-                  } else {
-                    setFormData({ ...formData, event_location: e.target.value });
-                  }
-                }}
-              >
-                <option value="">Selecione o local...</option>
-                {(locations || [])
-                  .slice()
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
+          <div className="space-y-6">
+            {/* Escolha do Casal e Signatário */}
+            <div className="p-4 bg-slate-50 rounded-3xl border border-[#883545]/10 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">Tipo de Casal</label>
+                <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
+                  {[
+                    { id: 'tradicional', label: 'Noiva & Noivo', icon: Sparkles },
+                    { id: 'noivas', label: 'Noiva & Noiva', icon: Heart },
+                    { id: 'noivos', label: 'Noivo & Noivo', icon: Heart }
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, couple_type: type.id as any, signer_type: type.id === 'noivos' ? 'noivo' : 'noiva' })}
+                      className={`flex-1 py-2.5 px-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex flex-col items-center gap-1 ${formData.couple_type === type.id ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <type.icon className="w-3 h-3" />
+                      {type.label}
+                    </button>
                   ))}
-                <option value="NEW_LOCATION" className="font-black text-[#883545] bg-rose-50 italic">➕ Cadastrar Novo Local...</option>
-              </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t border-slate-200/50 pt-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">Quem assinará o contrato?</label>
+                <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
+                  {formData.couple_type === 'tradicional' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'noiva' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noiva' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Noiva
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Ambos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'noivo' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noivo' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Noivo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: (formData.couple_type === 'noivas' ? 'noiva' : 'noivo') })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type !== 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Contratante
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Ambos
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {/* Identificação Principal (Signatário) */}
+              <div className="p-4 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="size-6 bg-[#883545]/10 rounded-lg flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 text-[#883545]" />
+                  </div>
+                  <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Contratante (Signatário)</label>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-black text-slate-400 uppercase">Nome Completo</label>
+                  <input
+                    required
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold focus:ring-[#883545] border shadow-inner"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">CPF</label>
+                    <input
+                      required
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
+                      placeholder="000.000.000-00"
+                      value={formData.cpf}
+                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">RG</label>
+                    <input
+                      required
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
+                      value={formData.rg}
+                      onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Nacionalidade</label>
+                    <select
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                      value={formData.nationality}
+                      onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                    >
+                      <option value={formData.couple_type === 'noivas' || (formData.couple_type === 'tradicional' && formData.signer_type === 'noiva') ? 'Brasileira' : 'Brasileiro'}>
+                        {formData.couple_type === 'noivas' || (formData.couple_type === 'tradicional' && formData.signer_type === 'noiva') ? 'Brasileira' : 'Brasileiro'}
+                      </option>
+                      <option value="Estrangeiro(a)">Estrangeiro(a)</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Estado Civil</label>
+                    <select
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold"
+                      value={formData.marital_status}
+                      onChange={(e) => setFormData({ ...formData, marital_status: e.target.value })}
+                    >
+                      {formData.couple_type === 'noivas' || (formData.couple_type === 'tradicional' && formData.signer_type === 'noiva') ? (
+                        <>
+                          <option value="Solteira">Solteira</option>
+                          <option value="Casada">Casada</option>
+                          <option value="Divorciada">Divorciada</option>
+                          <option value="Viúva">Viúva</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="Solteiro">Solteiro</option>
+                          <option value="Casado">Casado</option>
+                          <option value="Divorciado">Divorciado</option>
+                          <option value="Viúvo">Viúvo</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Profissão</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
+                      placeholder="Ex: Advogada, Arquiteto..."
+                      value={formData.profession}
+                      onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Data de Nascimento</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
+                      value={formData.birth_date}
+                      onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div className="p-4 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="size-6 bg-[#883545]/10 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-3.5 h-3.5 text-[#883545]" />
+                  </div>
+                  <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Endereço de Residência</label>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-[#883545] uppercase">CEP</label>
+                    <input
+                      className="w-full rounded-xl border-[#883545]/20 bg-white p-3 text-xs font-black shadow-sm focus:ring-[#883545] border"
+                      placeholder="00000-000"
+                      value={formData.zip_code}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-3 flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Rua / Logradouro</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Número</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner"
+                      placeholder="Ex: 123"
+                      value={formData.address_number}
+                      onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-3 flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Complemento / Apto</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner"
+                      placeholder="Ex: Apto 12 Bloco B"
+                      value={formData.address_complement}
+                      onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Bairro</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner"
+                      value={formData.neighborhood}
+                      onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Cidade</label>
+                    <input
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">UF</label>
+                    <input
+                      maxLength={2}
+                      className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-xs font-bold shadow-inner text-center uppercase"
+                      placeholder="SP"
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dados do Parceiro */}
+              <div className="p-4 bg-[#883545]/5 border border-[#883545]/10 rounded-3xl space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-[#883545] uppercase tracking-widest">
+                    {formData.couple_type === 'tradicional' ? (formData.signer_type === 'noiva' ? 'Nome do Noivo' : 'Nome da Noiva') :
+                      (formData.couple_type === 'noivas' ? 'Nome da Noiva 2' : 'Nome do Noivo 2')}
+                  </label>
+                  <input
+                    className="w-full rounded-xl border-[#883545]/10 bg-white p-3 lg:p-4 text-sm font-bold focus:ring-[#883545] border shadow-sm"
+                    value={formData.spouse_name}
+                    onChange={(e) => setFormData({ ...formData, spouse_name: e.target.value })}
+                  />
+                </div>
+
+                {formData.signer_type === 'ambos' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="grid grid-cols-2 gap-3 pt-2"
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">CPF (Parceiro 2)</label>
+                      <input
+                        className="w-full rounded-xl border-slate-100 bg-white p-3 text-xs font-bold shadow-sm"
+                        placeholder="000.000.000-00"
+                        value={formData.spouse_cpf}
+                        onChange={(e) => setFormData({ ...formData, spouse_cpf: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">RG (Parceiro 2)</label>
+                      <input
+                        className="w-full rounded-xl border-slate-100 bg-white p-3 text-xs font-bold shadow-sm"
+                        value={formData.spouse_rg}
+                        onChange={(e) => setFormData({ ...formData, spouse_rg: e.target.value })}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Contato para ZapSign */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">E-mail para assinatura</label>
+                  <input
+                    type="email"
+                    required={isContractFlow}
+                    placeholder="email@exemplo.com"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp (ZapSign)</label>
+                  <input
+                    type="tel"
+                    placeholder="(00) 00000-0000"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
+                    value={formData.phone_number}
+                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Detalhes do Evento */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data do Evento</label>
+                  <input
+                    required
+                    type="date"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
+                    value={formData.event_date}
+                    onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de Serviço</label>
+                  <select
+                    required
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
+                    value={formData.service_type}
+                    onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
+                  >
+                    <option value="">Selecione o serviço...</option>
+                    {([...(serviceTypes || [])].sort((a, b) => a.localeCompare(b))).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Contrato (R$)</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Local do Evento / Cerimônia</label>
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
+                    value={formData.event_location}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'NEW_LOCATION') {
+                        onGoToSettings();
+                      } else {
+                        const matchedLoc = locations.find(l => l.name === val);
+                        setFormData(prev => ({
+                          ...prev,
+                          event_location: val,
+                          event_address: matchedLoc?.address || prev.event_address
+                        }));
+                      }
+                    }}
+                  >
+                    <option value="">Selecione o local...</option>
+                    {(locations || [])
+                      .slice()
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((l) => (
+                        <option key={l.name} value={l.name}>
+                          {l.name}
+                        </option>
+                      ))}
+                    <option value="NEW_LOCATION" className="font-black text-[#883545] bg-rose-50 italic">➕ Cadastrar Novo Local...</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome do Local Manual (Editável)</label>
+                  <span className="text-[8px] font-bold text-[#883545]/50 italic">Pode alterar o nome aqui caso não queira cadastrar</span>
+                </div>
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-black text-[#883545] shadow-inner"
-                  value={formData.contract_value}
-                  onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
+                  placeholder="Nome do Local..."
+                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold shadow-inner"
+                  value={formData.event_location}
+                  onChange={(e) => setFormData({ ...formData, event_location: e.target.value })}
                 />
               </div>
+
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor Original (R$)</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Endereço do Local</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm text-slate-400 line-through font-bold shadow-inner"
-                  value={formData.original_value}
-                  onChange={(e) => setFormData({ ...formData, original_value: e.target.value })}
+                  placeholder="Rua, Número, Cidade..."
+                  className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm shadow-inner"
+                  value={formData.event_address}
+                  onChange={(e) => setFormData({ ...formData, event_address: e.target.value })}
                 />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#883545]" />
+                  <span className="text-[10px] font-black text-slate-600 uppercase">Cerimônia e Recepção em locais diferentes?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, has_different_locations: !formData.has_different_locations })}
+                  className={`w-10 h-5 rounded-full transition-all relative ${formData.has_different_locations ? 'bg-[#883545]' : 'bg-slate-300'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.has_different_locations ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+
+              {formData.has_different_locations && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="space-y-4 p-4 bg-[#883545]/5 rounded-3xl border border-[#883545]/10"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-[#883545] uppercase tracking-widest">Local da Recepção</label>
+                    <select
+                      className="w-full rounded-xl border-[#883545]/10 bg-white p-3 lg:p-4 text-sm font-bold shadow-sm"
+                      value={formData.reception_location}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'NEW_LOCATION') {
+                          onGoToSettings();
+                        } else {
+                          const matchedLoc = locations.find(l => l.name === val);
+                          setFormData(prev => ({
+                            ...prev,
+                            reception_location: val,
+                            reception_address: matchedLoc?.address || prev.reception_address
+                          }));
+                        }
+                      }}
+                    >
+                      <option value="">Selecione o local...</option>
+                      {(locations || [])
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((l) => (
+                          <option key={l.name} value={l.name}>
+                            {l.name}
+                          </option>
+                        ))}
+                      <option value="NEW_LOCATION" className="font-black text-[#883545] bg-rose-50 italic">➕ Cadastrar Novo Local...</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-[#883545] uppercase tracking-widest">Nome do Local (Editável)</label>
+                    </div>
+                    <input
+                      placeholder="Nome do buffet, bistro, etc..."
+                      className="w-full rounded-xl border-[#883545]/10 bg-white p-3 lg:p-4 text-sm shadow-sm font-bold"
+                      value={formData.reception_location}
+                      onChange={(e) => setFormData({ ...formData, reception_location: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-[#883545] uppercase tracking-widest">Endereço da Recepção</label>
+                    <input
+                      placeholder="Rua, Número, Cidade..."
+                      className="w-full rounded-xl border-[#883545]/10 bg-white p-3 lg:p-4 text-sm shadow-sm"
+                      value={formData.reception_address}
+                      onChange={(e) => setFormData({ ...formData, reception_address: e.target.value })}
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Convidados</label>
+                  <input
+                    type="number"
+                    placeholder="Qtd"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-black shadow-inner"
+                    value={formData.guest_count}
+                    onChange={(e) => setFormData({ ...formData, guest_count: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hora Extra (R$)</label>
+                  <input
+                    type="number"
+                    placeholder="350"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-black shadow-inner"
+                    value={formData.extra_hour_value}
+                    onChange={(e) => setFormData({ ...formData, extra_hour_value: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 col-span-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Contrato (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-black text-[#883545] shadow-inner"
+                    value={formData.contract_value}
+                    onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 text-center">Horários do Evento</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horário Início</label>
+                    <input type="time" className="w-full p-3 lg:p-4 bg-white border border-slate-100 rounded-xl text-sm font-bold shadow-sm" value={formData.event_start_time} onChange={(e) => setFormData({ ...formData, event_start_time: e.target.value })} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horário Fim</label>
+                    <input type="time" className="w-full p-3 lg:p-4 bg-white border border-slate-100 rounded-xl text-sm font-bold shadow-sm" value={formData.event_end_time} onChange={(e) => setFormData({ ...formData, event_end_time: e.target.value })} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <button type="submit" className="w-full bg-[#883545] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-xl shadow-[#883545]/20 hover:bg-[#883545]/90 hover:-translate-y-1 transition-all">
-            {brideToEdit ? 'Atualizar Cliente' : 'Salvar Cadastro'}
+          <button type="submit" className="w-full bg-[#883545] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-xl shadow-[#883545]/25 hover:bg-[#883545]/90 hover:-translate-y-1 transition-all flex items-center justify-center gap-3">
+            {isContractFlow ? (
+              <>
+                Próximo: Revisar Contrato
+                <ChevronRight className="w-5 h-5" />
+              </>
+            ) : (
+              brideToEdit ? 'Atualizar Cliente' : 'Salvar Cadastro'
+            )}
           </button>
         </form>
       </motion.div>
@@ -3424,6 +4308,7 @@ export default function App() {
   const [isPublicBrandingLoaded, setIsPublicBrandingLoaded] = useState(false);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
+  const [isContractFlow, setIsContractFlow] = useState(false);
 
   const handleTabChange = (newTab: string) => {
     if (activeTab === 'settings' && newTab !== 'settings' && hasUnsavedSettings) {
@@ -3650,20 +4535,24 @@ export default function App() {
         body: JSON.stringify(brideData)
       });
       if (res.ok) {
+        const savedBride = await res.json();
         await fetchData();
         setBrideToEdit(null);
-        alert(brideToEdit ? 'Cliente atualizado com sucesso! ✓' : 'Cliente cadastrado com sucesso! ✓');
-        return true;
+
+        if (!isContractFlow) {
+          alert(brideToEdit ? 'Cliente atualizado com sucesso! ✓' : 'Cliente cadastrado com sucesso! ✓');
+        }
+        return savedBride;
       } else {
         const errorData = await res.json();
         console.error('Erro ao salvar cliente:', errorData);
         alert(`Erro ao salvar: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
-        return false;
+        return null;
       }
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao tentar salvar o cliente.');
-      return false;
+      return null;
     }
   };
 
@@ -3848,13 +4737,22 @@ export default function App() {
               </div>
             </div>
             {activeTab === 'brides' && (
-              <button
-                onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-                className="w-full bg-[#883545] text-white p-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="uppercase tracking-widest text-xs">Novo Evento</span>
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={() => { setIsContractFlow(false); setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                  className="w-full bg-white text-[#883545] border-2 border-[#883545] p-3.5 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-[#883545]/5 active:scale-95 transition-all shadow-sm"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="uppercase tracking-widest text-[10px]">Novo Cliente</span>
+                </button>
+                <button
+                  onClick={() => { setIsContractFlow(true); setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                  className="w-full bg-[#883545] text-white p-3.5 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-[#883545]/25"
+                >
+                  <FileText className="w-5 h-5" />
+                  <span className="uppercase tracking-widest text-[10px]">Novo Contrato</span>
+                </button>
+              </div>
             )}
           </div>
         </aside>
@@ -3949,10 +4847,12 @@ export default function App() {
                       key="brides"
                       brides={brides}
                       payments={payments}
-                      onEdit={(bride) => { setBrideToEdit(bride); setIsBrideModalOpen(true); }}
+                      onEdit={(bride) => { setIsContractFlow(false); setBrideToEdit(bride); setIsBrideModalOpen(true); }}
                       onUpdateStatus={handleUpdateBrideStatus}
                       onDelete={handleDeleteBride}
                       settings={settings}
+                      authFetch={authFetch}
+                      onNewContract={() => { setIsContractFlow(true); setBrideToEdit(null); setIsBrideModalOpen(true); }}
                     />
                   )}
                   {activeTab === 'finance' && (
@@ -3988,14 +4888,24 @@ export default function App() {
                 </AnimatePresence>
               </div>
 
-              {/* Mobile Floating Action Button */}
+              {/* Mobile Floating Action Buttons */}
               {activeTab === 'brides' && (
-                <button
-                  onClick={() => { setBrideToEdit(null); setIsBrideModalOpen(true); }}
-                  className="lg:hidden fixed bottom-24 right-6 size-14 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white"
-                >
-                  <Plus className="w-8 h-8" />
-                </button>
+                <div className="lg:hidden fixed bottom-24 right-6 flex flex-col gap-3 z-40">
+                  <button
+                    onClick={() => { setIsContractFlow(true); setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                    className="size-12 bg-[#883545] text-white rounded-full shadow-2xl flex items-center justify-center border-4 border-white active:scale-95 transition-all"
+                    title="Novo Contrato"
+                  >
+                    <FileText className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={() => { setIsContractFlow(false); setBrideToEdit(null); setIsBrideModalOpen(true); }}
+                    className="size-14 bg-emerald-600 text-white rounded-full shadow-2xl flex items-center justify-center border-4 border-white active:scale-95 transition-all"
+                    title="Novo Cliente"
+                  >
+                    <Plus className="w-8 h-8" />
+                  </button>
+                </div>
               )}
             </motion.div>
           )}
@@ -4004,11 +4914,27 @@ export default function App() {
 
       <BrideModal
         isOpen={isBrideModalOpen}
-        onClose={() => { setIsBrideModalOpen(false); setBrideToEdit(null); }}
-        onSave={handleSaveBride}
+        onClose={() => { setIsBrideModalOpen(false); setBrideToEdit(null); setIsContractFlow(false); }}
+        onSave={async (data) => {
+          const saved = await handleSaveBride(data);
+          if (saved) {
+            setIsBrideModalOpen(false);
+            if (isContractFlow) {
+              setBrideToEdit(null);
+              // Pequeno delay para a animação do modal anterior fechar
+              setTimeout(() => {
+                const event = new CustomEvent('open-contract', { detail: saved });
+                window.dispatchEvent(event);
+              }, 300);
+            }
+            return true;
+          }
+          return false;
+        }}
         brideToEdit={brideToEdit}
         serviceTypes={settings.services}
         locations={settings.locations}
+        isContractFlow={isContractFlow}
         onGoToSettings={() => {
           setIsBrideModalOpen(false);
           setSettingsSubTab('services');

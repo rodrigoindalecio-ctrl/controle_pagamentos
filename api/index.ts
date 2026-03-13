@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { zapsignService } from "./zapsignService.ts";
 
 dotenv.config();
 
@@ -603,7 +604,14 @@ app.get("/api/brides", requireAuth, async (req, res) => {
 });
 
 app.post("/api/brides", requireAuth, async (req, res) => {
-    const { name, email, event_date, service_type, contract_value, original_value } = req.body;
+    const { 
+        name, email, event_date, service_type, contract_value, original_value,
+        cpf, rg, birth_date, address, phone_number, neighborhood, city, state, zip_code,
+        spouse_name, event_start_time, event_end_time, event_location, signer_type,
+        marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
+        event_address, has_different_locations, reception_location, reception_address, guest_count,
+        address_number, address_complement, extra_hour_value
+    } = req.body;
     // Initial balance is the contract value
     const cv = pureNum(contract_value);
     const ov = pureNum(original_value);
@@ -614,12 +622,18 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         name,
         email,
         event_date: event_date || null,
-        event_location: req.body.event_location || null,
+        event_location: event_location || null,
         service_type,
         contract_value: cv,
         original_value: ov,
         balance: initialBalance,
-        status: 'Ativa'
+        status: 'Ativa',
+        cpf, rg, birth_date: birth_date || null, address, phone_number,
+        neighborhood, city, state, zip_code,
+        spouse_name, event_start_time, event_end_time, signer_type,
+        marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
+        event_address, has_different_locations, reception_location, reception_address, guest_count,
+        address_number, address_complement, extra_hour_value
     };
 
     const { data, error } = await supabase
@@ -783,7 +797,33 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
             event_location: req.body.event_location,
             service_type,
             contract_value: pureNum(contract_value),
-            original_value: pureNum(original_value)
+            original_value: pureNum(original_value),
+            cpf: req.body.cpf,
+            rg: req.body.rg,
+            spouse_name: req.body.spouse_name,
+            phone_number: req.body.phone_number,
+            event_start_time: req.body.event_start_time,
+            event_end_time: req.body.event_end_time,
+            signer_type: req.body.signer_type,
+            address: req.body.address,
+            neighborhood: req.body.neighborhood,
+            city: req.body.city,
+            state: req.body.state,
+            zip_code: req.body.zip_code,
+            marital_status: req.body.marital_status,
+            profession: req.body.profession,
+            nationality: req.body.nationality,
+            couple_type: req.body.couple_type,
+            spouse_cpf: req.body.spouse_cpf,
+            spouse_rg: req.body.spouse_rg,
+            event_address: req.body.event_address,
+            has_different_locations: req.body.has_different_locations,
+            reception_location: req.body.reception_location,
+            reception_address: req.body.reception_address,
+            guest_count: req.body.guest_count,
+            address_number: req.body.address_number,
+            address_complement: req.body.address_complement,
+            extra_hour_value: req.body.extra_hour_value
         })
         .eq("id", id);
 
@@ -837,6 +877,73 @@ app.post("/api/expenses", requireAuth, async (req, res) => {
         console.error("Post expense error:", error);
         return res.status(500).json(error);
     }
+    res.json(data);
+});
+
+// --- Rotas de Contratos ---
+
+app.get("/api/contract-templates", requireAuth, async (req, res) => {
+    const { data, error } = await supabase.from("contract_templates").select("*").order("name");
+    if (error) return res.status(500).json(error);
+    res.json(data);
+});
+
+app.post("/api/contracts/preview", requireAuth, async (req, res) => {
+    const { template_id, bride_id, custom_text } = req.body;
+    try {
+        let textToRender = custom_text;
+        if (!textToRender && template_id) {
+            const { data: template } = await supabase.from("contract_templates").select("template_text").eq("id", template_id).single();
+            textToRender = template?.template_text;
+        }
+        
+        const rendered = await zapsignService.renderTemplate(textToRender, bride_id);
+        res.json({ rendered });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/api/contracts", requireAuth, async (req, res) => {
+    const { bride_id, template_id, generated_text } = req.body;
+    const { data, error } = await supabase.from("contracts").insert([{
+        bride_id,
+        template_id,
+        generated_text,
+        status: 'draft'
+    }]).select().single();
+
+    if (error) return res.status(500).json(error);
+    res.json(data);
+});
+
+app.post("/api/contracts/:id/send", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { signer_type } = req.body; // 'noiva' ou 'noivo'
+    const user = (req as any).user;
+    const userSettings = user?.user_metadata?.app_settings || {};
+    
+    console.log(`[ZapSign] Iniciando envio do contrato ${id} para o usuário: ${user?.email}`);
+    console.log(`[ZapSign] Configurações encontradas:`, { hasToken: !!userSettings.zapsignToken, isSandbox: userSettings.isSandbox });
+
+    try {
+        const result = await zapsignService.sendToZapSign(id, signer_type, {
+            zapsignToken: userSettings.zapsignToken,
+            isSandbox: userSettings.isSandbox
+        });
+        console.log(`[ZapSign] Documento criado com sucesso: ${result.open_id}`);
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/api/contracts", requireAuth, async (req, res) => {
+    const { data, error } = await supabase
+        .from("contracts")
+        .select(`*, brides(name)`)
+        .order("created_at", { ascending: false });
+    if (error) return res.status(500).json(error);
     res.json(data);
 });
 
