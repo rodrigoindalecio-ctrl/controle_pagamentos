@@ -4658,9 +4658,12 @@ export default function App() {
         setSettings(newSettings);
         setHasUnsavedSettings(false);
         return true;
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Erro retornado pela API de settings:', errorData);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Erro de rede ao salvar settings:', e);
     }
     return false;
   };
@@ -4675,9 +4678,12 @@ export default function App() {
         setUserProfile(newProfile);
         setHasUnsavedSettings(false);
         return true;
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Erro retornado pela API de profile:', errorData);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Erro de rede ao salvar profile:', e);
     }
     return false;
   };
