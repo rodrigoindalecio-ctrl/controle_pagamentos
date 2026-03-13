@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { zapsignService } from "./zapsignService";
+import { zapsignService } from "./zapsignService.ts";
 
 dotenv.config();
 
