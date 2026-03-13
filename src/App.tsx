@@ -3668,9 +3668,36 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
     }
   }, [brideToEdit, isOpen]);
 
+  const maskCPF = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11);
+    return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  };
+
+  const maskRG = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 9);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return d.replace(/(\d{2})(\d+)/, '$1.$2');
+    if (d.length <= 8) return d.replace(/(\d{2})(\d{3})(\d+)/, '$1.$2.$3');
+    return d.replace(/(\d{2})(\d{3})(\d{3})(\d)/, '$1.$2.$3-$4');
+  };
+
+  const maskPhone = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d.length ? `(${d}` : '';
+    if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+    return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  };
+
+  const maskCEP = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 8);
+    return d.length > 5 ? `${d.slice(0,5)}-${d.slice(5)}` : d;
+  };
+
   const handleCepChange = async (cep: string) => {
-    const cleanCep = cep.replace(/\D/g, '');
-    setFormData(prev => ({ ...prev, zip_code: cep }));
+    const masked = maskCEP(cep);
+    const cleanCep = masked.replace(/\D/g, '');
+    setFormData(prev => ({ ...prev, zip_code: masked }));
 
     if (cleanCep.length === 8) {
       try {
@@ -3827,8 +3854,9 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
                       required
                       className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
                       placeholder="000.000.000-00"
+                      maxLength={14}
                       value={formData.cpf}
-                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, cpf: maskCPF(e.target.value) })}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -3836,8 +3864,10 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
                     <input
                       required
                       className="w-full rounded-xl border-slate-100 bg-slate-50 p-3 text-sm font-bold shadow-inner"
+                      placeholder="00.000.000-0"
+                      maxLength={12}
                       value={formData.rg}
-                      onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, rg: maskRG(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -4043,9 +4073,10 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
                   <input
                     type="tel"
                     placeholder="(00) 00000-0000"
+                    maxLength={15}
                     className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm focus:ring-[#883545] border shadow-inner transition-all"
                     value={formData.phone_number}
-                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, phone_number: maskPhone(e.target.value) })}
                   />
                 </div>
               </div>
