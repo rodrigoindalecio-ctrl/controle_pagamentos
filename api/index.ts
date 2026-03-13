@@ -2,14 +2,10 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
-import { zapsignService } from "./zapsignService.ts";
+import * as dotenv from "dotenv";
+import { zapsignService } from "./zapsignService";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Cliente padrão (anon) para operações de dados
 const supabase = createClient(
     process.env.SUPABASE_URL || "",
@@ -955,7 +951,7 @@ export default app;
 
 // Função para iniciar o servidor (usada localmente)
 export async function startServer() {
-    const rootDir = path.resolve(__dirname, "..");
+    const rootDir = process.cwd();
 
     if (process.env.NODE_ENV !== "production") {
         // Importação dinâmica para evitar que o Vercel tente carregar o Vite em produção
