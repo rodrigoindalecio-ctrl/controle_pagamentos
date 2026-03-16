@@ -1715,7 +1715,7 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpe
   );
 };
 
-const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings, authFetch, onNewContract, onNewBride }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, authFetch: any, onNewContract: () => void, onNewBride: () => void, key?: string }) => {
+const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings, authFetch, onNewContract, onNewBride, showAlert }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, authFetch: any, onNewContract: () => void, onNewBride: () => void, showAlert: (t: string, m: string) => void, key?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Ativa');
   const [yearFilter, setYearFilter] = useState('Todos');
@@ -2281,6 +2281,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         onClose={() => setIsContractModalOpen(false)}
         bride={brideForModal}
         authFetch={authFetch}
+        showAlert={showAlert}
       />
     </motion.div >
   );
@@ -5019,6 +5020,7 @@ export default function App() {
                       onDelete={handleDeleteBride}
                       settings={settings}
                       authFetch={authFetch}
+                      showAlert={showAlert}
                       onNewContract={() => { setIsContractFlow(true); setBrideToEdit(null); setIsBrideModalOpen(true); }}
                       onNewBride={() => { setIsContractFlow(false); setBrideToEdit(null); setIsBrideModalOpen(true); }}
                     />
