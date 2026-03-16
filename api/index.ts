@@ -143,7 +143,16 @@ app.get("/api/settings", requireAuth, async (req, res) => {
     const { data: { user: latestUser }, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
 
     if (error || !latestUser) return res.status(500).json({ error: 'Erro ao buscar configurações' });
-    res.json(latestUser.user_metadata?.app_settings || {});
+    
+    const settings = latestUser.user_metadata?.app_settings || {};
+    
+    // MASCARAR TOKEN SENSÍVEL ANTES DE ENVIAR AO FRONT
+    if (settings.zapsignToken && settings.zapsignToken.length > 8) {
+        const token = settings.zapsignToken;
+        settings.zapsignToken = `${token.substring(0, 4)}****************${token.substring(token.length - 4)}`;
+    }
+    
+    res.json(settings);
 });
 
 app.post("/api/settings", requireAuth, async (req, res) => {
@@ -152,6 +161,11 @@ app.post("/api/settings", requireAuth, async (req, res) => {
 
     const { data: { user: latestUser }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(user.id);
     if (fetchError || !latestUser) return res.status(500).json({ error: 'Erro ao buscar usuário' });
+
+    // SE O TOKEN VIER MASCARADO, NÃO SOBRESCREVER O REAL NO BANCO
+    if (settings.zapsignToken && settings.zapsignToken.includes('*')) {
+        settings.zapsignToken = latestUser.user_metadata?.app_settings?.zapsignToken;
+    }
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
         user_metadata: { ...latestUser.user_metadata, app_settings: settings }
@@ -178,14 +192,6 @@ app.post("/api/profile", requireAuth, async (req, res) => {
 
 // === API Routes (todas protegidas por autenticação) ===
 
-app.get("/api/debug-data", async (req, res) => {
-    try {
-        const { data: payments } = await supabase.from("payments").select("payment_date, description").order("payment_date", { ascending: false }).limit(5);
-        res.json({ status: "ok", last_payments: payments });
-    } catch (e) {
-        res.status(500).json({ status: "error" });
-    }
-});
 app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     try {
         const now = new Date();
