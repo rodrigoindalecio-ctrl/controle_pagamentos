@@ -53,7 +53,8 @@ import {
   ExternalLink,
   Copy,
   ChevronRight,
-  Save
+  Save,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -1536,7 +1537,7 @@ const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments, goals }: {
   );
 };
 
-const ContractModal = ({ isOpen, onClose, bride, authFetch }: { isOpen: boolean, onClose: () => void, bride: Bride | null, authFetch: any }) => {
+const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpen: boolean, onClose: () => void, bride: Bride | null, authFetch: any, showAlert: (t: string, m: string) => void }) => {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [previewText, setPreviewText] = useState('');
@@ -1581,7 +1582,7 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch }: { isOpen: boolean,
       setPreviewText(data.rendered);
       setStep('preview');
     } catch (err) {
-      alert('Erro ao gerar prévia');
+      showAlert('Erro na Prévia', 'Erro ao gerar prévia');
     } finally {
       setIsRendering(false);
     }
@@ -1607,10 +1608,10 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch }: { isOpen: boolean,
         setStep('sent');
       } else {
         console.error('[ZapSign Error] Resposta sem link de assinatura:', result);
-        alert(result.error || result.detail || 'Erro desconhecido ao enviar para o ZapSign (Link não gerado)');
+        showAlert('Erro no Link', result.error || result.detail || 'Erro desconhecido ao enviar para o ZapSign (Link não gerado)');
       }
     } catch (err) {
-      alert('Erro ao enviar contrato');
+      showAlert('Erro no Contrato', 'Erro ao enviar contrato');
     } finally {
       setIsSending(false);
     }
@@ -1747,7 +1748,11 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
 
   const filteredBrides = brides.filter(b => {
     if (b.id === 58) return false; // Esconde o cliente de BV da lista
-    const matchesSearch = b.name.toLowerCase().includes(searchTerm.toLowerCase()) || (b.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = b.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (b.spouse_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (b.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (b.event_date ? parseDate(b.event_date)?.toLocaleDateString('pt-BR').includes(searchTerm) : false) ||
+                          (b.event_date || '').includes(searchTerm);
     const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;
     const matchesYear = yearFilter === 'Todos' || (b.event_date || '').startsWith(yearFilter);
     const matchesBalance = balanceFilter === 'Todos' || (balanceFilter === 'Com Pendência' ? b.balance > 1 : b.balance <= 1);
@@ -1812,7 +1817,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Nome ou email..."
+                      placeholder="Nome, e-mail ou data (DD/MM)..."
                       className="w-full pl-11 pr-11 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -1921,7 +1926,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Nome ou email..."
+              placeholder="Nome, e-mail ou data (DD/MM/AAAA)..."
               className="w-full pl-11 pr-11 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#883545]/20 transition-all shadow-inner"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -2007,7 +2012,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         <button
           onClick={() => { setSearchTerm(''); setStatusFilter('Ativa'); setYearFilter('Todos'); setBalanceFilter('Todos'); setLocalFilter('Todos'); }}
           className="p-3 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
-          title="Limpar Filtros"
+          title="Limpar todos os filtros"
         >
           <Filter className="w-5 h-5" />
         </button>
@@ -2027,8 +2032,15 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
 
                 <div className="flex justify-between items-start pr-4">
                   <div>
-                    <h3 className="text-base font-black text-slate-900 leading-tight group-hover:text-[#883545] transition-colors">{bride.name}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{bride.email}</p>
+                    <h3 className="text-base font-black text-slate-900 leading-tight group-hover:text-[#883545] transition-colors">
+                      {bride.name}
+                    </h3>
+                    {bride.spouse_name && (
+                      <p className="text-[11px] font-bold text-slate-400 -mt-0.5 italic">
+                        & {bride.spouse_name}
+                      </p>
+                    )}
+                    <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1">{bride.email}</p>
                   </div>
                   <div className="relative">
                     <button
@@ -2150,8 +2162,15 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     <tr key={bride.id} className={`${settings.ui.compactMode ? 'hover:bg-[#883545]/5' : 'hover:bg-[#883545]/5'} transition-colors group`}>
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
                         <div className="flex flex-col">
-                          <span className={`${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors`}>{bride.name}</span>
-                          <span className="text-[10px] text-slate-500">{bride.email}</span>
+                          <span className={`${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors`}>
+                            {bride.name}
+                          </span>
+                          {bride.spouse_name && (
+                            <span className="text-[11px] font-medium text-slate-400 -mt-0.5 italic">
+                              & {bride.spouse_name}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-300 mt-0.5">{bride.email}</span>
                         </div>
                       </td>
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
@@ -2941,7 +2960,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
   );
 };
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile' }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system' }) => {
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>(initialTab);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
@@ -2957,13 +2976,13 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
       if (s1 && s2) {
         localStorage.setItem('wedding_settings', JSON.stringify(settings));
         localStorage.setItem('wedding_user_profile', JSON.stringify(userProfile));
-        alert('Configurações salvas com sucesso! ✓');
+        showAlert('Sucesso', 'Configurações salvas com sucesso! ✓');
       } else {
-        alert('Houve um erro ao salvar algumas informações. Verifique sua conexão.');
+        showAlert('Erro ao Salvar', 'Houve um erro ao salvar algumas informações. Verifique sua conexão.');
       }
     } catch (e) {
       console.error(e);
-      alert('Erro inesperado ao salvar.');
+      showAlert('Erro Inesperado', 'Erro inesperado ao salvar.');
     } finally {
       setIsSavingAll(false);
     }
@@ -3217,7 +3236,7 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                             setIsChangingPass(false);
                           }
                         }}
-                        className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-[#883545] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                        className="w-full h-14 bg-[#883545] text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-[#883545]/90 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                       >
                         {isChangingPass ? (
                           <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
@@ -3587,7 +3606,8 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
     guest_count: '',
     address_number: '',
     address_complement: '',
-    extra_hour_value: 300
+    extra_hour_value: 300,
+    created_at: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -3626,7 +3646,8 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
         guest_count: (brideToEdit as any).guest_count || '',
         address_number: (brideToEdit as any).address_number || '',
         address_complement: (brideToEdit as any).address_complement || '',
-        extra_hour_value: (brideToEdit as any).extra_hour_value || 350
+        extra_hour_value: (brideToEdit as any).extra_hour_value || 350,
+        created_at: brideToEdit.created_at ? brideToEdit.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
       });
     } else {
       setFormData({
@@ -3663,7 +3684,8 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
         guest_count: '',
         address_number: '',
         address_complement: '',
-        extra_hour_value: 350
+        extra_hour_value: 350,
+        created_at: new Date().toISOString().split('T')[0]
       });
     }
   }, [brideToEdit, isOpen]);
@@ -3753,6 +3775,36 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
           }
         }}>
           <div className="space-y-6">
+            {/* Seletor de Data de Inclusão */}
+            <div className={`p-4 rounded-3xl border transition-all ${isContractFlow ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-[#883545]/5 border-[#883545]/10 shadow-sm'}`}>
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`size-10 rounded-2xl flex items-center justify-center shadow-sm ${isContractFlow ? 'bg-slate-200 text-slate-400' : 'bg-white text-[#883545]'}`}>
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Data de Inclusão no Sistema</p>
+                    <h4 className="text-sm font-black text-slate-700 mt-1">
+                      {isContractFlow ? 'Definida automaticamente para hoje' : 'Quando este registro foi criado?'}
+                    </h4>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-1.5 w-full lg:w-48">
+                  <input
+                    type="date"
+                    disabled={isContractFlow}
+                    className="w-full rounded-xl border-slate-100 bg-white p-3 text-sm font-black text-[#883545] shadow-sm focus:ring-[#883545] border disabled:cursor-not-allowed"
+                    value={formData.created_at}
+                    onChange={(e) => setFormData({ ...formData, created_at: e.target.value })}
+                  />
+                  {isContractFlow && (
+                    <span className="text-[9px] font-bold text-slate-400 italic text-center">Travado para Contratos</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Escolha do Casal e Signatário */}
             <div className="p-4 bg-slate-50 rounded-3xl border border-[#883545]/10 space-y-4">
               <div className="space-y-2">
@@ -4313,6 +4365,44 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
   );
 };
 
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'confirm' }: { isOpen: boolean, onClose: () => void, onConfirm?: () => void, title: string, message: string, type?: 'confirm' | 'alert' }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-[#883545]/20 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl relative z-10 overflow-hidden"
+      >
+        <div className="p-8 text-center">
+          <div className={`size-16 mx-auto mb-6 rounded-2xl flex items-center justify-center ${type === 'confirm' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+            {type === 'confirm' ? <AlertCircle className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+          </div>
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">{title}</h3>
+          <p className="text-sm font-bold text-slate-500 leading-relaxed mb-8 px-4">{message}</p>
+          <div className="flex gap-3">
+            {type === 'confirm' ? (
+              <>
+                <button onClick={onClose} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
+                <button onClick={() => { onConfirm?.(); onClose(); }} className="flex-1 py-4 bg-[#883545] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#883545]/90 shadow-lg shadow-[#883545]/20 transition-all">Confirmar</button>
+              </>
+            ) : (
+              <button onClick={onClose} className="w-full py-4 bg-[#883545] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#883545]/90 shadow-lg shadow-[#883545]/20 transition-all">Entendido</button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -4356,14 +4446,33 @@ export default function App() {
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
   const [isContractFlow, setIsContractFlow] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean, title: string, message: string, onConfirm?: () => void, type: 'confirm' | 'alert' }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'confirm'
+  });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmConfig({ isOpen: true, title, message, onConfirm, type: 'confirm' });
+  };
+
+  const showAlert = (title: string, message: string) => {
+    setConfirmConfig({ isOpen: true, title, message, type: 'alert' });
+  };
 
   const handleTabChange = (newTab: string) => {
     if (activeTab === 'settings' && newTab !== 'settings' && hasUnsavedSettings) {
-      if (!window.confirm("Você tem alterações nas configurações que não foram salvas.\n\nDeseja sair sem salvar e perder essas alterações?")) {
-        return;
-      }
-      setHasUnsavedSettings(false);
-      fetchData(); // Roda para restaurar para a última versão salva do banco
+      showConfirm(
+        "Alterações Não Salvas",
+        "Você tem alterações nas configurações que não foram salvas. Deseja sair sem salvar e perder essas alterações?",
+        () => {
+          setHasUnsavedSettings(false);
+          fetchData();
+          setActiveTab(newTab);
+        }
+      );
+      return;
     }
     setActiveTab(newTab);
   };
@@ -4587,18 +4696,18 @@ export default function App() {
         setBrideToEdit(null);
 
         if (!isContractFlow) {
-          alert(brideToEdit ? 'Cliente atualizado com sucesso! ✓' : 'Cliente cadastrado com sucesso! ✓');
+          showAlert('Sucesso', brideToEdit ? 'Cliente atualizado com sucesso! ✓' : 'Cliente cadastrado com sucesso! ✓');
         }
         return savedBride;
       } else {
         const errorData = await res.json();
         console.error('Erro ao salvar cliente:', errorData);
-        alert(`Erro ao salvar: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        showAlert('Erro ao Salvar', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
         return null;
       }
     } catch (e: any) {
       console.error('[handleSaveBride Error]', e);
-      alert(`Erro inesperado ao salvar: ${e.message}`);
+      showAlert('Erro Inesperado', `Erro: ${e.message}`);
       return null;
     }
   };
@@ -4611,16 +4720,16 @@ export default function App() {
       });
       if (res.ok) {
         await fetchData();
-        alert('Pagamento registrado com sucesso! ✓');
+        showAlert('Pagamento', 'Pagamento registrado com sucesso! ✓');
         return true;
       } else {
         const errorData = await res.json();
-        alert(`Erro ao registrar pagamento: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        showAlert('Erro no Pagamento', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
         return false;
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão ao tentar registrar pagamento.');
+      showAlert('Erro de Conexão', 'Erro de conexão ao tentar registrar pagamento.');
       return false;
     }
   };
@@ -4633,16 +4742,16 @@ export default function App() {
       });
       if (res.ok) {
         await fetchData();
-        alert('Despesa registrada com sucesso! ✓');
+        showAlert('Despesa', 'Despesa registrada com sucesso! ✓');
         return true;
       } else {
         const errorData = await res.json();
-        alert(`Erro ao registrar despesa: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        showAlert('Erro na Despesa', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
         return false;
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão ao tentar registrar despesa.');
+      showAlert('Erro de Conexão', 'Erro de conexão ao tentar registrar despesa.');
       return false;
     }
   };
@@ -4659,32 +4768,37 @@ export default function App() {
       });
       if (res.ok) {
         await fetchData();
-        alert(`Status do cliente atualizado para: ${status} ✓`);
+        showAlert('Status Atualizado', `Status do cliente atualizado para: ${status} ✓`);
       } else {
         const errorData = await res.json();
-        alert(`Erro ao atualizar status: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        showAlert('Erro no Status', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão ao tentar atualizar status.');
+      showAlert('Erro de Conexão', 'Erro de conexão ao tentar atualizar status.');
     }
   };
 
   const handleDeleteBride = async (id: number) => {
-    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
-    try {
-      const res = await authFetch(`/api/brides/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await fetchData();
-        alert('Cliente excluído com sucesso! ✓');
-      } else {
-        const errorData = await res.json();
-        alert(`Erro ao excluir cliente: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+    showConfirm(
+      "Excluir Cliente",
+      "Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          const res = await authFetch(`/api/brides/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            await fetchData();
+            showAlert('Sucesso', 'Cliente excluído com sucesso! ✓');
+          } else {
+            const errorData = await res.json();
+            showAlert('Erro', `Erro ao excluir cliente: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+          }
+        } catch (e) {
+          console.error(e);
+          showAlert('Erro', 'Erro de conexão ao tentar excluir cliente.');
+        }
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao tentar excluir cliente.');
-    }
+    );
   };
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
@@ -4937,6 +5051,8 @@ export default function App() {
                       onSaveSettings={handleSaveSettings}
                       onSaveProfile={handleSaveProfile}
                       initialTab={settingsSubTab}
+                      showAlert={showAlert}
+                      showConfirm={showConfirm}
                     />
                   )}
                 </AnimatePresence>
@@ -4996,6 +5112,11 @@ export default function App() {
         }}
       />
       {isAuthenticated && <MobileNav activeTab={activeTab} setActiveTab={handleTabChange} />}
+      
+      <ConfirmModal 
+        {...confirmConfig} 
+        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} 
+      />
     </div>
   );
 }

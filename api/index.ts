@@ -177,6 +177,15 @@ app.post("/api/profile", requireAuth, async (req, res) => {
 });
 
 // === API Routes (todas protegidas por autenticação) ===
+
+app.get("/api/debug-data", async (req, res) => {
+    try {
+        const { data: payments } = await supabase.from("payments").select("payment_date, description").order("payment_date", { ascending: false }).limit(5);
+        res.json({ status: "ok", last_payments: payments });
+    } catch (e) {
+        res.status(500).json({ status: "error" });
+    }
+});
 app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     try {
         const now = new Date();
@@ -610,7 +619,7 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         spouse_name, event_start_time, event_end_time, event_location, signer_type,
         marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
         event_address, has_different_locations, reception_location, reception_address, guest_count,
-        address_number, address_complement, extra_hour_value
+        address_number, address_complement, extra_hour_value, created_at
     } = req.body;
     // Initial balance is the contract value
     const cv = pureNum(contract_value);
@@ -635,7 +644,8 @@ app.post("/api/brides", requireAuth, async (req, res) => {
         event_address, has_different_locations, reception_location, reception_address,
         guest_count: guest_count !== "" && guest_count !== null ? parseInt(guest_count, 10) : null,
         address_number, address_complement,
-        extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null
+        extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null,
+        created_at: created_at || new Date().toISOString()
     };
 
     const { data, error } = await supabase
@@ -680,6 +690,9 @@ app.get("/api/payments", requireAuth, async (req, res) => {
             bride_name: (p as any).brides?.name || `ID: ${p.bride_id}`
         }));
 
+        if (formattedData.length > 0) {
+            console.log(`[API] Fetching ${formattedData.length} payments. Latest: ${formattedData[0].payment_date}`);
+        }
         res.json(formattedData);
     } catch (err) {
         console.error("Critical error in /api/payments:", err);
@@ -843,9 +856,22 @@ app.put("/api/brides/:id", requireAuth, async (req, res) => {
 
 app.delete("/api/brides/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { error } = await supabase.from("brides").delete().eq("id", id);
-    if (error) return res.status(500).json(error);
-    res.json({ success: true });
+    try {
+        // 1. Deletar Contratos vinculados
+        await supabase.from("contracts").delete().eq("bride_id", id);
+        
+        // 2. Deletar Pagamentos vinculados (exceto BV que pode ser compartilhado, mas aqui bride_id é único)
+        await supabase.from("payments").delete().eq("bride_id", id);
+        
+        // 3. Deletar o Cliente
+        const { error } = await supabase.from("brides").delete().eq("id", id);
+        
+        if (error) throw error;
+        res.json({ success: true, message: "Cliente e dados vinculados excluídos com sucesso." });
+    } catch (err) {
+        console.error("Erro ao excluir cliente:", err);
+        res.status(500).json({ error: "Erro ao excluir cliente e seus dados secundários." });
+    }
 });
 
 app.get("/api/expenses", requireAuth, async (req, res) => {
