@@ -3753,79 +3753,83 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
           }
         }}>
           <div className="space-y-6">
-            {/* Escolha do Casal e Signatário - Apenas para NOVO CONTRATO */}
-            {isContractFlow && (
-              <div className="p-4 bg-slate-50 rounded-3xl border border-[#883545]/10 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">Tipo de Casal</label>
-                  <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
-                    {[
-                      { id: 'tradicional', label: 'Noiva & Noivo', icon: Sparkles },
-                      { id: 'noivas', label: 'Noiva & Noiva', icon: Heart },
-                      { id: 'noivos', label: 'Noivo & Noivo', icon: Heart }
-                    ].map((type) => (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, couple_type: type.id as any, signer_type: type.id === 'noivos' ? 'noivo' : 'noiva' })}
-                        className={`flex-1 py-2.5 px-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex flex-col items-center gap-1 ${formData.couple_type === type.id ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                      >
-                        <type.icon className="w-3 h-3" />
-                        {type.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2 border-t border-slate-200/50 pt-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">Quem assinará o contrato?</label>
-                  <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
-                    {formData.couple_type === 'tradicional' ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, signer_type: 'noiva' })}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noiva' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Noiva
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Ambos
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, signer_type: 'noivo' })}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noivo' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Noivo
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, signer_type: (formData.couple_type === 'noivas' ? 'noiva' : 'noivo') })}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type !== 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Contratante
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
-                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Ambos
-                        </button>
-                      </>
-                    )}
-                  </div>
+            {/* Escolha do Casal e Signatário */}
+            <div className="p-4 bg-slate-50 rounded-3xl border border-[#883545]/10 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">Configuração do Casal</label>
+                <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
+                  {[
+                    { id: 'tradicional', label: 'Noiva & Noivo', icon: Sparkles },
+                    { id: 'noivas', label: 'Noiva & Noiva', icon: Heart },
+                    { id: 'noivos', label: 'Noivo & Noivo', icon: Heart }
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, couple_type: type.id as any, signer_type: type.id === 'noivos' ? 'noivo' : 'noiva' })}
+                      className={`flex-1 py-2.5 px-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex flex-col items-center gap-1 ${formData.couple_type === type.id ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <type.icon className="w-3 h-3" />
+                      {type.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+
+              <div className={`space-y-2 ${isContractFlow ? 'border-t border-slate-200/50 pt-4' : ''}`}>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block text-center">
+                  {isContractFlow ? 'Quem assinará o contrato?' : 'Quem é o cliente principal?'}
+                </label>
+                <div className="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-inner">
+                  {formData.couple_type === 'tradicional' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'noiva' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noiva' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Noiva
+                      </button>
+                      {isContractFlow && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
+                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Ambos
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: 'noivo' })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'noivo' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Noivo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, signer_type: (formData.couple_type === 'noivas' ? 'noiva' : 'noivo') })}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type !== 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Contratante
+                      </button>
+                      {isContractFlow && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, signer_type: 'ambos' })}
+                          className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${formData.signer_type === 'ambos' ? 'bg-[#883545] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Ambos
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-4">
               {/* Identificação Principal (Signatário) */}
@@ -3834,11 +3838,15 @@ const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes, locati
                   <div className="size-6 bg-[#883545]/10 rounded-lg flex items-center justify-center">
                     <User className="w-3.5 h-3.5 text-[#883545]" />
                   </div>
-                  <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Contratante (Signatário)</label>
+                  <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">
+                    {formData.couple_type === 'tradicional' ? (formData.signer_type === 'noiva' ? 'Contratante (Noiva)' : 'Contratante (Noivo)') : 'Contratante (Signatário)'}
+                  </label>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase">Nome Completo</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase">
+                    {formData.couple_type === 'tradicional' ? (formData.signer_type === 'noiva' ? 'Nome da Noiva' : 'Nome do Noivo') : 'Nome Completo'}
+                  </label>
                   <input
                     required
                     className="w-full rounded-xl border-[#883545]/10 bg-slate-50 p-3 lg:p-4 text-sm font-bold focus:ring-[#883545] border shadow-inner"
