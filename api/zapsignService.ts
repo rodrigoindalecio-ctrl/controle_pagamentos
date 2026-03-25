@@ -231,7 +231,56 @@ export const zapsignService = {
             rendered = rendered.replace(/\bdomiciliado\b/g, 'domiciliada');
         }
 
-        return rendered;
+        // Post-processamento para Estilização (Forçando Centralização na ZapSign com Respiro de Linhas)
+        let lines = rendered.split('\n');
+
+        if (lines.length > 0 && lines[0].trim().length > 0) {
+            // Título: Isolado por linhas em branco para o parser entender a tag <center>
+            lines[0] = `\n\n<center>\n\n**${lines[0].trim().toUpperCase()}**\n\n</center>\n\n`;
+        }
+
+        // Negrito para Cláusulas e Seções
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            
+            // Negrito para Seções (linhas curtas em CAIXA ALTA)
+            if (line.length > 3 && line.length < 50 && line === line.toUpperCase() && !line.includes('<center>')) {
+                lines[i] = `**${line}**`;
+            }
+
+            // Negrito para Início de Cláusulas: "Cláusula Xª"
+            lines[i] = lines[i].replace(/^(Cláusula \d+[ªº]\.?)/gi, '**$1**');
+            
+            // Negrito para "Parágrafo ..."
+            lines[i] = lines[i].replace(/^(Parágrafo (único|primeiro|segundo|terceiro|quarto|quinto|sexto)\.?)/gi, '**$1**');
+        }
+
+        // Centralizar Bloco de Assinaturas (Tudo do final)
+        let firstSignatureLineIndex = -1;
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            if (line.includes('____') || line.match(/, \d{1,2} de .* de \d{4}/)) {
+                firstSignatureLineIndex = i;
+                break;
+            }
+        }
+
+        if (firstSignatureLineIndex !== -1) {
+            // Criamos um bloco limpo e centralizado para o final do documento
+            let footerBlock = `\n\n<center>\n\n`;
+            for (let i = firstSignatureLineIndex; i < lines.length; i++) {
+                let line = lines[i].trim();
+                if (line !== "") {
+                    footerBlock += line + `  \n`; // Quebra de linha Markdown
+                }
+            }
+            footerBlock += `\n\n</center>\n\n`;
+            
+            // Remove as linhas originais do final e insere o bloco formatado
+            lines.splice(firstSignatureLineIndex, lines.length - firstSignatureLineIndex, footerBlock);
+        }
+
+        return lines.join('\n');
     },
 
     /**
@@ -267,6 +316,8 @@ export const zapsignService = {
 
         if (!clientEmail) throw new Error("E-mail do cliente é obrigatório para o ZapSign.");
 
+        const clientPhone = (contract.brides.phone_number || "").replace(/\D/g, "");
+
         const payload = {
             name: `Contrato - ${contract.brides.name}`,
             markdown_text: contract.generated_text,
@@ -275,12 +326,16 @@ export const zapsignService = {
                     name: "Vanessa Bidinotti",
                     email: "vanessabidinotti@hotmail.com", 
                     auth_mode: "signature",
+                    send_email: true,
                     order: 1
                 },
                 {
                     name: clientName,
                     email: clientEmail,
+                    phone_number: clientPhone,
                     auth_mode: "signature",
+                    send_email: true,
+                    send_automatic_whatsapp: true,
                     order: 2
                 }
             ],

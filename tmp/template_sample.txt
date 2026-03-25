@@ -1,0 +1,80 @@
+CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORIA DO DIA
+
+IDENTIFICAÇÃO DAS PARTES
+CONTRATANTE: {{cliente_nome}}, {{cliente_nacionalidade}}, {{cliente_estado_civil}}, {{cliente_profissao}}, Carteira de Identidade nº {{cliente_rg}} e CPF: {{cliente_cpf}}, Nascida em {{cliente_nascimento}}; residente e domiciliada: {{cliente_endereco}} - Bairro: {{cliente_bairro}} CEP: {{cliente_cep}} - Cidade: {{cliente_cidade}} no Estado de {{cliente_estado}}; Telefone: {{cliente_telefone}}.
+
+CONTRATADA: {{empresa_nome}}, inscrita no CNPJ sob nº {{empresa_cnpj}}, com sede na {{empresa_endereco}}, doravante denominada “Vanessa Bidinotti – Assessoria e Cerimonial”, neste ato representada por sua titular {{empresa_representante}}, brasileira, casada, Assessora de Eventos, portadora da Cédula de Identidade RG nº {{empresa_representante_rg}} e CPF nº {{empresa_representante_cpf}}, telefone: {{empresa_telefone}}.
+
+As partes identificadas acima têm, entre si, justo e acertado o presente Contrato de Prestação de Serviços, que se regerá pelas cláusulas seguintes e pelas condições de preço, forma e termo de pagamento descritas no presente.
+
+DO OBJETO DO CONTRATO
+Cláusula 1ª. É objeto do presente contrato a prestação do serviço de Assessoria Para o Dia do Evento e Cerimonial, para o casamento do CONTRATATANTE com {{noivo_nome}}, que se realizará no dia {{data_evento}} das {{horario_inicio}} as {{horario_fim}}. {{descricao_locais}}. Casamento para {{quantidade_convidados}} convidados. A equipe contratada permanecerá no(s) local(is) por aproximadamente {{duracao_evento}} totais.
+
+OBRIGAÇÕES DO CONTRATANTE
+Cláusula 2ª. O CONTRATANTE deverá fornecer a CONTRATADA:  
+Parágrafo primeiro: todas as informações necessárias à realização do serviço, devendo especificar os detalhes necessários à perfeita consecução do mesmo, e a forma de como ele deve ser entregue.
+Parágrafo segundo: o fornecimento de alimentação sendo almoço/jantar para toda a equipe de assessoria contratada, preferencialmente em local separado ao dos convidados. 
+Parágrafo terceiro: uma vaga para automóvel isenta de custo.
+Cláusula 3ª. O CONTRATANTE deverá efetuar o pagamento na forma e condições estabelecidas na cláusula 7ª.
+
+OBRIGAÇÕES DA CONTRATADA
+Cláusula 4ª. A CONTRATADA deverá entregar ao CONTRATANTE os seguintes serviços:
+Parágrafo único. Assessoria para o Dia do Casamento e Cerimonial, composta dos seguintes itens:
+1 – Reunião com os clientes para elaboração de cronograma da cerimônia e recepção. 
+2 – Conferência de todos os itens contratados, bem como contato com fornecedores. (conforme informações fornecidas pelo cliente).
+3 – Supervisão da montagem do evento, coordenando todos os profissionais e produtos contratados (DJ, banda, buffet, decoração, etc.).
+4 – Coordenação do cerimonial:
+– Acompanhamento da noiva;
+– Orientação na entrada dos pais, padrinhos e damas;
+– Organização de entrada, saída e eventuais atividades que aconteçam no cerimonial;
+– Conferência do cronograma de músicas;
+5 – Coordenação da recepção:
+– Providências para possíveis soluções de contratempos.
+– Checagem de cronograma (previamente enviado) com todos os envolvidos no evento;
+– Orientação e posicionamento para cumprimentos e fotos;
+– Coordenação do atendimento aos convidados.
+– Atenção a convidados com necessidades especiais, grávidas e idosos;
+– Supervisão das fotos e vídeo.
+– Organização para a Valsa.
+– Entrega de lembrancinhas e bem-casados; (se necessário)
+– Coordenação/Orientação nos principais momentos da festa, como: corte simbólico do bolo, brinde dos noivos, buquê, retrospectiva, gravata, sapatinho, etc. 
+6 – Ao final do evento, conferir quantidade de itens restantes (doces, bebidas, lembrancinhas) e colocar no carro dos noivos ou de algum parente previamente indicado.
+
+Não nos responsabilizamos pela qualidade dos serviços de terceiros.
+
+Cláusula 5ª. A CONTRATADA poderá enviar equipe própria, composta exclusivamente por profissionais integrantes de sua empresa, incluindo segunda equipe, se necessário, para a execução dos serviços descritos neste contrato, assegurando a mesma qualidade e padrão de atendimento originalmente contratados.
+Cláusula 6ª. É dever da CONTRATADA oferecer ao contratante a cópia do presente instrumento, contendo todas as especificidades da prestação de serviço contratada.
+
+DO PREÇO E DAS CONDIÇÕES DE PAGAMENTO
+Cláusula 7ª. O presente serviço será remunerado pela quantia de {{valor_contrato}}, referente aos serviços contratados.
+O pagamento deverá ser efetuado por Pix para a chave {{empresa_pix}} (em nome da representante legal da CONTRATADA, {{empresa_representante}}), Banco {{empresa_banco}}, Agência: 2979, Conta Corrente: 02027039-4, impreterivelmente até {{prazo_pagamento}} dias antes da data do evento.
+Para horas adicionais, será cobrado o valor de {{valor_hora_extra}} por hora contratada.
+
+DO INADIMPLEMENTO, DO DESCUMPRIMENTO, DA MULTA E RESCISÃO
+Cláusula 8ª. Em caso de inadimplemento por parte do CONTRATANTE quanto ao pagamento do serviço prestado, deverá incidir sobre o valor do presente instrumento, multa pecuniária de 2%, juros de mora de 1% ao mês e correção monetária.
+Cláusula 9ª. No caso de não haver o cumprimento de qualquer uma das cláusulas do presente instrumento, a parte que não cumpriu deverá pagar uma multa de 50% do valor do contrato descrito na Cláusula 7ª para a outra parte imediatamente na data do descumprimento.
+Cláusula 10ª. O presente contrato poderá ser rescindido por qualquer uma das partes, mediante notificação a outra, por escrito, com prazo máximo de 30 (trinta) dias corridos de antecedência ao evento descrito na Cláusula 1ª, estando a parte que solicitou a rescisão, sujeita ao pagamento de multa de 50% do valor do contrato descrito na Cláusula 7ª para a outra parte imediatamente na data da solicitação da rescisão. Se o pedido for realizado dentro do prazo de 30 (trinta) dias corridos anteriores ao evento, a multa será de 100% do valor contratado. 
+
+DO PRAZO
+Cláusula 11ª. O presente contrato terá vigência a partir da data de assinatura até a realização do evento informado na Cláusula 1ª, podendo a data do evento ser alterada pelo CONTRATANTE, desde que:
+a) haja comunicação por escrito à CONTRATADA, com antecedência mínima de 60 (sessenta) dias da data inicialmente contratada;
+b) esteja quitado, no mínimo, 50% (cinquenta por cento) do valor total previsto na Cláusula 7ª;
+c) a nova data não coincida com compromissos já assumidos pela CONTRATADA.
+Parágrafo único. Caso não sejam atendidas as condições acima, a alteração da data será considerada inviável, aplicando-se, conforme o caso, as penalidades previstas nas Cláusulas 9ª e 10ª deste contrato.
+
+DAS CONDIÇÕES GERAIS
+Cláusula 12ª. O CONTRATANTE autoriza, em caráter irretratável e irrevogável, a utilização e veiculação pela CONTRATADA das fotografias e vídeos realizados durante o evento, inclusive com o registro de sua imagem e do casal, para fins de publicidade, sem qualquer limitação de número de inserções e reproduções.
+
+Cláusula 13ª. As partes não responderão por descumprimento contratual decorrente de caso fortuito ou força maior, incluindo, mas não se limitando a pandemias, greves, desastres naturais ou impossibilidade de utilização do local do evento. Nesses casos, as partes deverão buscar conjuntamente uma solução razoável, inclusive remarcação, observadas as condições da Cláusula 11ª.
+Cláusula 14ª. Fica compactuado entre as partes a total inexistência de vínculo trabalhista entre as partes contratantes, excluindo as obrigações previdenciárias e os encargos sociais, não havendo entre CONTRATADA e CONTRATANTE qualquer tipo de relação de subordinação.
+Cláusula 15ª. Salvo com a expressa autorização da CONTRATADA, não pode o CONTRATANTE transferir ou subcontratar os serviços previstos neste instrumento, sob o risco de ocorrer a rescisão imediata.
+
+{{cidade_hoje}}, {{data_hoje}}.
+
+________________________________________
+{{cliente_nome}}
+
+________________________________________
+{{empresa_representante}}
+{{empresa_nome}}
+CNPJ: {{empresa_cnpj}}

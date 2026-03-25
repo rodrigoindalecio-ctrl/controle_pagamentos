@@ -3,39 +3,22 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.SUPABASE_URL || "",
     process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 );
 
-async function addDummy() {
-    console.log("Inserindo dummy para ver erro...");
-    const payload = {
-        name: "Dummy Test",
-        email: "dummy@test.com",
-        signer_type: "noiva",
-        couple_type: "tradicional",
-        marital_status: "Solteiro",
-        profession: "",
-        nationality: "Brasileiro(a)",
-        spouse_cpf: "",
-        spouse_rg: "",
-        event_address: "",
-        has_different_locations: false,
-        reception_location: "",
-        reception_address: "",
-        guest_count: null,
-        address_number: "",
-        address_complement: "",
-        extra_hour_value: 300
-    };
-
-    const { data, error } = await supabaseAdmin.from('brides').insert([payload]);
+async function checkColumns() {
+    const { data, error } = await supabase.from("brides").select("*").limit(1);
     if (error) {
-        console.error("Erro SQL:", error.code, error.message, error.details);
+        console.error("Error:", error);
+        return;
+    }
+    if (data && data.length > 0) {
+        console.log("Columns in 'brides' table:", Object.keys(data[0]));
     } else {
-        console.log("Sucesso, colunas existem!");
-        await supabaseAdmin.from('brides').delete().eq('name', 'Dummy Test');
+        console.log("No data in 'brides' table to check columns.");
     }
 }
-addDummy();
+
+checkColumns();

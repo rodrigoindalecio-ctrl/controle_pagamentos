@@ -609,67 +609,107 @@ const refreshBrideBalance = async (brideId: any) => {
 };
 
 app.get("/api/brides", requireAuth, async (req, res) => {
-    const { data, error } = await supabase
-        .from("brides")
-        .select("*")
-        .order("name", { ascending: true });
+    try {
+        const { data, error } = await supabase
+            .from("brides")
+            .select("*")
+            .order("name", { ascending: true });
 
-    if (error) return res.status(500).json(error);
-    res.json(data);
+        if (error) return res.status(500).json(error);
+        if (!data) return res.json([]);
+
+        // --- Lógica de Auto-Conclusão ---
+        // Se a data do evento já passou e o status ainda é 'Ativa', mudamos para 'Concluído'
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
+        const toUpdate = data.filter(b => 
+            (b.status === 'Ativa' || !b.status) && 
+            b.event_date && 
+            b.event_date < todayStr
+        );
+
+        if (toUpdate.length > 0) {
+            console.log(`[AUTO-COMPLETE] Atualizando ${toUpdate.length} eventos passados para 'Concluído'.`);
+            
+            // Executa as atualizações no banco
+            await Promise.all(toUpdate.map(b => 
+                supabase.from("brides").update({ status: 'Concluído' }).eq("id", b.id)
+            ));
+
+            // Atualiza os dados na memória para o retorno imediato
+            toUpdate.forEach(b => {
+                b.status = 'Concluído';
+            });
+        }
+
+        res.json(data);
+    } catch (err) {
+        console.error("Erro ao buscar noivas:", err);
+        res.status(500).json({ error: "Erro interno ao processar lista de clientes." });
+    }
 });
 
 app.post("/api/brides", requireAuth, async (req, res) => {
-    const {
-        name, email, event_date, service_type, contract_value, original_value,
-        cpf, rg, birth_date, address, phone_number, neighborhood, city, state, zip_code,
-        spouse_name, event_start_time, event_end_time, event_location, signer_type,
-        marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
-        event_address, has_different_locations, reception_location, reception_address, guest_count,
-        address_number, address_complement, extra_hour_value, created_at
-    } = req.body;
-    // Initial balance is the contract value
-    const cv = pureNum(contract_value);
-    const ov = pureNum(original_value);
-    const initialBalance = cv || ov || 0;
+    try {
+        const {
+            name, email, event_date, service_type, contract_value, original_value,
+            cpf, rg, birth_date, address, phone_number, neighborhood, city, state, zip_code,
+            spouse_name, event_start_time, event_end_time, event_location, signer_type,
+            marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
+            event_address, has_different_locations, reception_location, reception_address, guest_count,
+            address_number, address_complement, extra_hour_value, created_at
+        } = req.body;
+        
+        // Initial balance is the contract value
+        const cv = pureNum(contract_value);
+        const ov = pureNum(original_value);
+        const initialBalance = cv || ov || 0;
 
-    // Remove explicit ID if present to let DB auto-increment safely
-    const payload = {
-        name,
-        email,
-        event_date: event_date || null,
-        event_location: event_location || null,
-        service_type,
-        contract_value: cv,
-        original_value: ov,
-        balance: initialBalance,
-        status: 'Ativa',
-        cpf, rg, birth_date: birth_date || null, address, phone_number,
-        neighborhood, city, state, zip_code,
-        spouse_name, event_start_time, event_end_time, signer_type,
-        marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
-        event_address, has_different_locations, reception_location, reception_address,
-        guest_count: guest_count !== "" && guest_count !== null ? parseInt(guest_count, 10) : null,
-        address_number, address_complement,
-        extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null,
-        created_at: created_at || new Date().toISOString()
-    };
+        // Remove explicit ID if present to let DB auto-increment safely
+        const payload = {
+            name,
+            email,
+            event_date: event_date || null,
+            event_location: event_location || null,
+            service_type,
+            contract_value: cv,
+            original_value: ov,
+            balance: initialBalance,
+            status: 'Ativa',
+            cpf, rg, birth_date: birth_date || null, address, phone_number,
+            neighborhood, city, state, zip_code,
+            spouse_name, event_start_time, event_end_time, signer_type,
+            marital_status, profession, nationality, couple_type, spouse_cpf, spouse_rg,
+            event_address, has_different_locations, reception_location, reception_address,
+            guest_count: guest_count !== "" && guest_count !== null ? parseInt(guest_count, 10) : null,
+            address_number, address_complement,
+            extra_hour_value: extra_hour_value !== undefined ? pureNum(extra_hour_value) : null,
+            created_at: created_at || new Date().toISOString()
+        };
 
-    const { data, error } = await supabase
-        .from("brides")
-        .insert([payload])
-        .select();
+        const { data, error } = await supabase
+            .from("brides")
+            .insert([payload])
+            .select();
 
-    if (error) {
-        // Se der erro de chave duplicada, vamos tentar "resetar" a sequência no banco
-        if (error.code === '23505' || error.message?.includes('duplicate key')) {
-            console.log("Recuperando de erro de sequência... Tentando re-sincronizar IDs.");
-            // Truque para forçar o Supabase/Postgres a atualizar o contador interno
-            // (Busca o maior ID e tenta inserir algo depois dele, ou avisa o usuário do comando SQL)
-            // Nota: No Supabase SQL Editor: SELECT setval('brides_id_seq', (SELECT MAX(id) FROM brides));
+        if (error) {
+            console.error("[API] Erro ao inserir noiva:", error);
+            if (error.code === '23505' || error.message?.includes('duplicate key')) {
+                console.log("Recuperando de erro de sequência... Tentando re-sincronizar IDs.");
+            }
+            return res.status(500).json(error);
         }
-        return res.status(500).json(error);
+
+        if (!data || data.length === 0) {
+            return res.status(500).json({ error: "Erro ao recuperar dados inseridos." });
+        }
+
+        res.json(data[0]);
+    } catch (err: any) {
+        console.error("[API CRITICAL ERROR] POST /api/brides:", err);
+        res.status(500).json({ error: "Internal Server Error", message: err.message });
     }
-    res.json(data[0]);
 });
 
 app.get("/api/payments", requireAuth, async (req, res) => {
@@ -730,14 +770,55 @@ app.post("/api/payments", requireAuth, async (req, res) => {
         return res.status(500).json(error);
     }
 
-    // 2. If the payment is 'Pago', refresh the bride's balance
-    if ((status || 'Pago').trim().toLowerCase() === 'pago') {
-        if (finalRevenueType === 'assessoria' && String(bride_id) !== '58') {
-            await refreshBrideBalance(bride_id);
-        }
+    res.json(data);
+});
+
+app.put("/api/payments/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { description, amount_paid, payment_date, status, bride_id, revenue_type } = req.body;
+
+    const { data: oldPayment } = await supabase.from("payments").select("bride_id").eq("id", id).single();
+
+    const { data, error } = await supabase
+        .from("payments")
+        .update({
+            description,
+            amount_paid: Number(amount_paid) || 0,
+            payment_date,
+            status: status || 'Pago',
+            revenue_type,
+            bride_id
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Update payment error:", error);
+        return res.status(500).json(error);
+    }
+
+    if (oldPayment?.bride_id && String(oldPayment.bride_id) !== '58') {
+        await refreshBrideBalance(oldPayment.bride_id);
+    }
+    if (bride_id && String(bride_id) !== '58' && String(bride_id) !== String(oldPayment?.bride_id)) {
+        await refreshBrideBalance(bride_id);
     }
 
     res.json(data);
+});
+
+app.delete("/api/payments/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { data: oldPayment } = await supabase.from("payments").select("bride_id").eq("id", id).single();
+    
+    const { error } = await supabase.from("payments").delete().eq("id", id);
+    if (error) return res.status(500).json(error);
+
+    if (oldPayment?.bride_id && String(oldPayment.bride_id) !== '58') {
+        await refreshBrideBalance(oldPayment.bride_id);
+    }
+    res.json({ success: true });
 });
 
 app.patch("/api/brides/:id/status", requireAuth, async (req, res) => {
@@ -806,58 +887,63 @@ app.patch("/api/brides/:id/status", requireAuth, async (req, res) => {
 });
 
 app.put("/api/brides/:id", requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const { name, email, event_date, service_type, contract_value, original_value } = req.body;
+    try {
+        const { id } = req.params;
+        const { name, email, event_date, service_type, contract_value, original_value } = req.body;
 
-    const { error } = await supabase
-        .from("brides")
-        .update({
-            name,
-            email,
-            event_date: event_date || null,
-            event_location: req.body.event_location || null,
-            service_type,
-            contract_value: pureNum(contract_value),
-            original_value: pureNum(original_value),
-            cpf: req.body.cpf,
-            rg: req.body.rg,
-            birth_date: req.body.birth_date || null,
-            spouse_name: req.body.spouse_name,
-            phone_number: req.body.phone_number,
-            event_start_time: req.body.event_start_time,
-            event_end_time: req.body.event_end_time,
-            signer_type: req.body.signer_type,
-            address: req.body.address,
-            neighborhood: req.body.neighborhood,
-            city: req.body.city,
-            state: req.body.state,
-            zip_code: req.body.zip_code,
-            marital_status: req.body.marital_status,
-            profession: req.body.profession,
-            nationality: req.body.nationality,
-            couple_type: req.body.couple_type,
-            spouse_cpf: req.body.spouse_cpf,
-            spouse_rg: req.body.spouse_rg,
-            event_address: req.body.event_address,
-            has_different_locations: req.body.has_different_locations,
-            reception_location: req.body.reception_location,
-            reception_address: req.body.reception_address,
-            guest_count: req.body.guest_count !== "" && req.body.guest_count !== null ? parseInt(req.body.guest_count, 10) : null,
-            address_number: req.body.address_number,
-            address_complement: req.body.address_complement,
-            extra_hour_value: req.body.extra_hour_value !== undefined ? pureNum(req.body.extra_hour_value) : null
-        })
-        .eq("id", id);
+        const { error } = await supabase
+            .from("brides")
+            .update({
+                name,
+                email,
+                event_date: event_date || null,
+                event_location: req.body.event_location || null,
+                service_type,
+                contract_value: pureNum(contract_value),
+                original_value: pureNum(original_value),
+                cpf: req.body.cpf,
+                rg: req.body.rg,
+                birth_date: req.body.birth_date || null,
+                spouse_name: req.body.spouse_name,
+                phone_number: req.body.phone_number,
+                event_start_time: req.body.event_start_time,
+                event_end_time: req.body.event_end_time,
+                signer_type: req.body.signer_type,
+                address: req.body.address,
+                neighborhood: req.body.neighborhood,
+                city: req.body.city,
+                state: req.body.state,
+                zip_code: req.body.zip_code,
+                marital_status: req.body.marital_status,
+                profession: req.body.profession,
+                nationality: req.body.nationality,
+                couple_type: req.body.couple_type,
+                spouse_cpf: req.body.spouse_cpf,
+                spouse_rg: req.body.spouse_rg,
+                event_address: req.body.event_address,
+                has_different_locations: req.body.has_different_locations,
+                reception_location: req.body.reception_location,
+                reception_address: req.body.reception_address,
+                guest_count: req.body.guest_count !== "" && req.body.guest_count !== null ? parseInt(req.body.guest_count, 10) : null,
+                address_number: req.body.address_number,
+                address_complement: req.body.address_complement,
+                extra_hour_value: req.body.extra_hour_value !== undefined ? pureNum(req.body.extra_hour_value) : null
+            })
+            .eq("id", id);
 
-    if (error) {
-        console.error("Update bride error:", error);
-        return res.status(500).json(error);
+        if (error) {
+            console.error("[API] Erro ao atualizar noiva:", error);
+            return res.status(500).json(error);
+        }
+
+        // Recalcula o saldo pois o valor do contrato pode ter mudado ... 
+        await refreshBrideBalance(id);
+
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error("[API CRITICAL ERROR] PUT /api/brides/:id:", err);
+        res.status(500).json({ error: "Internal Server Error", message: err.message });
     }
-
-    // Recalcula o saldo pois o valor do contrato pode ter mudado ... 
-    await refreshBrideBalance(id);
-
-    res.json({ success: true });
 });
 
 app.delete("/api/brides/:id", requireAuth, async (req, res) => {
@@ -913,6 +999,36 @@ app.post("/api/expenses", requireAuth, async (req, res) => {
         return res.status(500).json(error);
     }
     res.json(data);
+});
+
+app.put("/api/expenses/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { description, amount, date, category } = req.body;
+
+    const { data, error } = await supabase
+        .from("expenses")
+        .update({
+            description,
+            amount: Number(amount) || 0,
+            date,
+            category: category || 'Geral'
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Update expense error:", error);
+        return res.status(500).json(error);
+    }
+    res.json(data);
+});
+
+app.delete("/api/expenses/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
 });
 
 // --- Rotas de Contratos ---
@@ -1005,7 +1121,8 @@ export async function startServer() {
     }
 
     const PORT = Number(process.env.PORT) || 3000;
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`API available at http://localhost:${PORT}/api`);
     });
 }

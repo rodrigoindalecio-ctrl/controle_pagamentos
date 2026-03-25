@@ -1715,6 +1715,224 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpe
   );
 };
 
+const ClientSummaryModal = ({ isOpen, onClose, bride, payments, onEdit }: { isOpen: boolean, onClose: () => void, bride: Bride | null, payments: Payment[], onEdit: (b: Bride) => void }) => {
+  if (!isOpen || !bride) return null;
+
+  const bridePayments = payments.filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago');
+  const totalPaid = bridePayments.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+  const balance = Math.max(0, (Number(bride.contract_value) || 0) - totalPaid);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+          />
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative bg-white w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
+          >
+            {/* Elegant Header */}
+            <div className="relative p-8 pb-6 overflow-hidden bg-gradient-to-br from-[#883545] to-[#6a2935] text-white">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+              <div className="relative flex justify-between items-start">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-white/20 text-white backdrop-blur-sm`}>
+                      {bride.status}
+                    </span>
+                    <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest italic">ID: {bride.id}</span>
+                  </div>
+                  
+                  {/* Dynamic Labels based on couple type */}
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">
+                        {bride.couple_type === 'noivos' ? 'Noivo' : 'Noiva'}:
+                      </span>
+                      <h3 className="text-3xl font-black italic tracking-tight leading-none">{bride.name}</h3>
+                    </div>
+                    {bride.spouse_name && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">
+                          {bride.couple_type === 'noivas' ? 'Noiva' : 'Noivo'}:
+                        </span>
+                        <p className="text-lg font-bold opacity-80 italic">{bride.spouse_name}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-8 space-y-8 bg-[#FDF8F8]/50">
+              {/* Event Section */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-[#883545]/10 pb-2">
+                  <Sparkles className="w-4 h-4 text-[#883545]" />
+                  <h4 className="text-xs font-black text-[#883545] uppercase tracking-[0.2em]">Detalhes do Evento</h4>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-y-6 gap-x-12">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Data do Casamento</p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Calendar className="w-4 h-4 text-[#883545]/40" />
+                      {bride.event_date ? formatDisplayDate(bride.event_date) : 'Não definido'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      {bride.couple_type === 'noivas' ? 'Noiva' : 'Noivo'}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Heart className="w-4 h-4 text-[#883545]/40" />
+                      {bride.spouse_name || 'Não informado'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Horário</p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Clock className="w-4 h-4 text-[#883545]/40" />
+                      {bride.event_start_time || '--:--'}
+                      {bride.event_end_time && ` até ${bride.event_end_time}`}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cerimônia / Local</p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <MapPin className="w-4 h-4 text-[#883545]/40" />
+                      <span className="truncate">{bride.event_location || 'Não definido'}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Convidados</p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Users className="w-4 h-4 text-[#883545]/40" />
+                      {bride.guest_count || '-'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipo de Serviço</p>
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Award className="w-4 h-4 text-[#883545]/40" />
+                      {bride.service_type || 'Não definido'}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Financial Section */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-[#883545]/10 pb-2">
+                  <CircleDollarSign className="w-4 h-4 text-[#883545]" />
+                  <h4 className="text-xs font-black text-[#883545] uppercase tracking-[0.2em]">Resumo Financeiro</h4>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Contrato</p>
+                    <div className="relative z-10">
+                      {bride.status === 'Cancelado' && bride.original_value > 0 ? (
+                        <>
+                          <p className="text-xs text-slate-300 line-through font-bold">R$ {bride.original_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-sm font-black text-rose-600">R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </>
+                      ) : (
+                        <p className="text-base font-black text-slate-700">R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      )}
+                    </div>
+                    <Wallet className="absolute -right-2 -bottom-2 w-12 h-12 text-[#883545]/5 group-hover:scale-110 transition-transform" />
+                  </div>
+
+                  <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 shadow-sm relative overflow-hidden group">
+                    <p className="text-[9px] font-black text-emerald-600/60 uppercase tracking-widest mb-1">Total Pago</p>
+                    <p className="text-base font-black text-emerald-600 relative z-10">R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <CheckCircle className="absolute -right-2 -bottom-2 w-12 h-12 text-emerald-600/5 group-hover:scale-110 transition-transform" />
+                  </div>
+
+                  <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 shadow-sm relative overflow-hidden group">
+                    <p className="text-[9px] font-black text-rose-600/60 uppercase tracking-widest mb-1">Saldo</p>
+                    <p className="text-base font-black text-rose-600 relative z-10">R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <TrendingDown className="absolute -right-2 -bottom-2 w-12 h-12 text-rose-600/5 group-hover:scale-110 transition-transform" />
+                  </div>
+                </div>
+
+                {/* Micro Payments List */}
+                <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                  <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Últimos Pagamentos</p>
+                  </div>
+                  <div className="max-h-32 overflow-auto divide-y divide-slate-50">
+                    {bridePayments.length === 0 ? (
+                      <p className="px-4 py-4 text-[10px] font-bold text-slate-300 italic text-center">Nenhum pagamento registrado.</p>
+                    ) : ( 
+                      bridePayments.sort((a,b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()).map(p => (
+                        <div key={p.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{formatDisplayDate(p.payment_date)}</span>
+                            <span className="text-[11px] font-black text-slate-900 italic translate-y-[1px]">{p.description || 'Assessoria'}</span>
+                          </div>
+                          <span className="text-[11px] font-black text-emerald-600">
+                            R$ {Number(p.amount_paid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Contact / Bio */}
+              <section className="grid grid-cols-2 gap-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Contato</p>
+                  <p className="text-xs font-bold text-slate-600">{bride.email}</p>
+                  <p className="text-xs font-black text-[#883545]">{bride.phone_number || '-'}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Endereço do Evento</p>
+                  <p className="text-[10px] font-bold text-slate-500 leading-tight">
+                    {bride.event_address || 'Não cadastrado'}
+                  </p>
+                </div>
+              </section>
+            </div>
+
+            <div className="p-6 bg-white border-t border-slate-50 flex gap-3">
+              <button 
+                onClick={onClose} 
+                className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all font-sans"
+              >
+                Fechar
+              </button>
+              <button 
+                onClick={() => { onEdit(bride); onClose(); }} 
+                className="flex-[2] py-4 bg-[#883545] text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#883545]/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Edit className="w-4 h-4" /> Editar Cadastro Completo
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settings, authFetch, onNewContract, onNewBride, showAlert }: { brides: Bride[], payments: Payment[], onEdit: (bride: Bride) => void, onUpdateStatus: (id: number, status: string, options?: any) => void, onDelete: (id: number) => void, settings: AppSettings, authFetch: any, onNewContract: () => void, onNewBride: () => void, showAlert: (t: string, m: string) => void, key?: string }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Ativa');
@@ -1724,6 +1942,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [brideForModal, setBrideForModal] = useState<Bride | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
@@ -2027,7 +2246,11 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
           filteredBrides.map((bride) => {
             const { totalPaid, balance } = calculateBalance(bride);
             return (
-              <div key={bride.id} className={`${settings.ui.compactMode ? 'p-3' : 'p-5'} bg-white rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative group`}>
+              <div 
+                key={bride.id} 
+                onClick={() => { setBrideForModal(bride); setIsSummaryModalOpen(true); }}
+                className={`${settings.ui.compactMode ? 'p-3' : 'p-5'} bg-white rounded-2xl border border-[#883545]/10 shadow-sm space-y-4 relative group cursor-pointer hover:shadow-md hover:border-[#883545]/30 transition-all`}
+              >
                 <div className={`absolute top-0 right-0 w-1.5 h-full rounded-r-2xl ${bride.status === 'Ativa' ? 'bg-emerald-500' : bride.status === 'Concluído' ? 'bg-blue-400' : bride.status === 'Inativa' ? 'bg-slate-300' : 'bg-rose-500'}`} />
 
                 <div className="flex justify-between items-start pr-4">
@@ -2037,12 +2260,12 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                     </h3>
                     {bride.spouse_name && (
                       <p className="text-[11px] font-bold text-slate-400 -mt-0.5 italic">
-                        & {bride.spouse_name}
+                        {bride.spouse_name}
                       </p>
                     )}
                     <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1">{bride.email}</p>
                   </div>
-                  <div className="relative">
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => setOpenMenuId(openMenuId === bride.id ? null : bride.id)}
                       className="p-2 -mr-2 text-slate-300 hover:text-[#883545] transition-colors"
@@ -2143,9 +2366,9 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Data Evento</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Local</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Serviço</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Valor Contrato</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Pago</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">A Pagar</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[140px]">Valor Contrato</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px]">Pago</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px]">A Pagar</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5">Status</th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5 text-center">Ações</th>
               </tr>
@@ -2159,7 +2382,11 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                 filteredBrides.map((bride) => {
                   const { totalPaid, balance } = calculateBalance(bride);
                   return (
-                    <tr key={bride.id} className={`${settings.ui.compactMode ? 'hover:bg-[#883545]/5' : 'hover:bg-[#883545]/5'} transition-colors group`}>
+                    <tr 
+                      key={bride.id} 
+                      onClick={() => { setBrideForModal(bride); setIsSummaryModalOpen(true); }}
+                      className={`${settings.ui.compactMode ? 'hover:bg-[#883545]/5' : 'hover:bg-[#883545]/5'} transition-colors group cursor-pointer`}
+                    >
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
                         <div className="flex flex-col">
                           <span className={`${settings.ui.compactMode ? 'text-xs' : 'text-sm'} font-extrabold text-slate-900 group-hover:text-[#883545] transition-colors`}>
@@ -2167,7 +2394,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                           </span>
                           {bride.spouse_name && (
                             <span className="text-[11px] font-medium text-slate-400 -mt-0.5 italic">
-                              & {bride.spouse_name}
+                              {bride.spouse_name}
                             </span>
                           )}
                           <span className="text-[10px] text-slate-300 mt-0.5">{bride.email}</span>
@@ -2188,7 +2415,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-slate-600`}>
                         {bride.service_type || 'Não definido'}
                       </td>
-                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-slate-700`}>
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-slate-700 whitespace-nowrap`}>
                         {bride.status === 'Cancelado' && bride.original_value > 0 ? (
                           <div className="flex flex-col">
                             <span className="text-rose-600">Multa: R$ {bride.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -2198,10 +2425,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                           <>R$ {(bride.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
                         )}
                       </td>
-                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-emerald-600`}>
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-bold text-emerald-600 whitespace-nowrap`}>
                         R$ {totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-[#883545]`}>
+                      <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'} text-xs font-black text-[#883545] whitespace-nowrap`}>
                         R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className={`${settings.ui.compactMode ? 'px-4 py-2' : 'px-4 lg:px-6 py-4'}`}>
@@ -2213,7 +2440,7 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                           {bride.status}
                         </span>
                       </td>
-                      <td className="px-4 lg:px-6 py-4 text-center relative">
+                      <td className="px-4 lg:px-6 py-4 text-center relative" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => setOpenMenuId(openMenuId === bride.id ? null : bride.id)}
                           className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-[#883545] transition-all"
@@ -2283,13 +2510,48 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         authFetch={authFetch}
         showAlert={showAlert}
       />
+      <ClientSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+        bride={brideForModal}
+        payments={payments}
+        onEdit={onEdit}
+      />
     </motion.div >
   );
 };
 
 // --- Finance View ---
-
-const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment, onAddExpense, onGoToSettings }: { payments: Payment[], expenses: Expense[], brides: Bride[], stats: DashboardStats | null, settings: AppSettings, onAddPayment: (p: any) => Promise<boolean>, onAddExpense: (e: any) => Promise<boolean>, onGoToSettings: () => void, key?: string }) => {
+const FinanceView = ({ 
+  payments, 
+  expenses, 
+  brides, 
+  stats, 
+  settings, 
+  onAddPayment, 
+  onAddExpense, 
+  onUpdatePayment,
+  onDeletePayment,
+  onUpdateExpense,
+  onDeleteExpense,
+  onGoToSettings 
+}: { 
+  payments: Payment[], 
+  expenses: Expense[], 
+  brides: Bride[], 
+  stats: DashboardStats | null, 
+  settings: AppSettings, 
+  onAddPayment: (p: any) => Promise<boolean>, 
+  onAddExpense: (e: any) => Promise<boolean>, 
+  onUpdatePayment: (id: number, p: any) => Promise<boolean>,
+  onDeletePayment: (id: number) => Promise<void>,
+  onUpdateExpense: (id: number, e: any) => Promise<boolean>,
+  onDeleteExpense: (id: number) => Promise<void>,
+  onGoToSettings: () => void, 
+  key?: string 
+}) => {
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [openMenuId, setFinanceMenuId] = useState<string | null>(null);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   // Filtros para lançamentos recentes
@@ -2395,14 +2657,19 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
       </div>
 
       <AnimatePresence>
-        {isFinanceModalOpen && (
+        {(isFinanceModalOpen || !!editingItem) && (
           <FinanceModal
-            isOpen={isFinanceModalOpen}
-            onClose={() => setIsFinanceModalOpen(false)}
+            isOpen={isFinanceModalOpen || !!editingItem}
+            onClose={() => { setIsFinanceModalOpen(false); setEditingItem(null); }}
             brides={brides}
             partners={settings.partners}
             onAddPayment={onAddPayment}
             onAddExpense={onAddExpense}
+            onUpdatePayment={onUpdatePayment}
+            onDeletePayment={onDeletePayment}
+            onUpdateExpense={onUpdateExpense}
+            onDeleteExpense={onDeleteExpense}
+            itemToEdit={editingItem}
             onGoToSettings={onGoToSettings}
           />
         )}
@@ -2547,10 +2814,6 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
           <div className="bg-white rounded-2xl border border-[#883545]/10 shadow-sm overflow-hidden min-h-[400px]">
             <div className="p-4 lg:p-6 border-b border-[#883545]/5 flex justify-between items-center bg-[#883545]/5">
               <h3 className="font-bold text-slate-800">Lançamentos Recentes</h3>
-              <div className="flex gap-2">
-                <button className="p-2 hover:bg-white rounded-lg text-slate-500 transition-all"><Search className="w-5 h-5" /></button>
-                <button className="p-2 hover:bg-white rounded-lg text-slate-500 transition-all"><MoreVertical className="w-5 h-5" /></button>
-              </div>
             </div>
             <div className="lg:hidden p-4 space-y-4">
               {filteredItems.length === 0 ? (
@@ -2569,9 +2832,17 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                       </p>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-white">
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                        <Calendar className="w-3 h-3 text-[#883545]/40" />
-                        {item.payment_date && formatDisplayDate(item.payment_date)}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                          <Calendar className="w-3 h-3 text-[#883545]/40" />
+                          {item.payment_date && formatDisplayDate(item.payment_date)}
+                        </div>
+                        <button 
+                          onClick={() => setEditingItem(item)}
+                          className="text-[10px] font-black text-[#883545] uppercase tracking-widest px-2 py-1 bg-white rounded-lg shadow-sm"
+                        >
+                          Editar
+                        </button>
                       </div>
                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${item.isExpense ? 'bg-rose-100 text-rose-700' :
                         (item.status || '').trim().toLowerCase() === 'pago' ? 'bg-emerald-100 text-emerald-700' :
@@ -2593,6 +2864,7 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                     <th className="px-6 py-4">Data</th>
                     <th className="px-6 py-4 text-right">Valor</th>
                     <th className="px-6 py-4">Tipo / Status</th>
+                    <th className="px-6 py-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#883545]/5">
@@ -2620,6 +2892,34 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
                             }`}>
                             {item.isExpense ? 'SAÍDA' : 'ENTRADA'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-center relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setFinanceMenuId(openMenuId === (item.id + (item.isExpense ? '-exp' : '-pay')) ? null : (item.id + (item.isExpense ? '-exp' : '-pay')))}
+                            className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-[#883545] transition-all"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {openMenuId === (item.id + (item.isExpense ? '-exp' : '-pay')) && (
+                            <div className="absolute right-4 top-12 w-40 bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(136,53,69,0.4)] border border-[#883545]/10 z-[100] p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <button 
+                                onClick={() => { setEditingItem(item); setFinanceMenuId(null); }} 
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> Editar
+                              </button>
+                              <button 
+                                onClick={() => { 
+                                  if (item.isExpense) onDeleteExpense(item.id); 
+                                  else onDeletePayment(item.id);
+                                  setFinanceMenuId(null);
+                                }} 
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -2708,7 +3008,33 @@ const FinanceView = ({ payments, expenses, brides, stats, settings, onAddPayment
   );
 };
 
-const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddExpense, onGoToSettings }: { isOpen: boolean, onClose: () => void, brides: Bride[], partners: string[], onAddPayment: (p: any) => Promise<boolean>, onAddExpense: (e: any) => Promise<boolean>, onGoToSettings: () => void }) => {
+const FinanceModal = ({ 
+  isOpen, 
+  onClose, 
+  brides, 
+  partners, 
+  onAddPayment, 
+  onAddExpense, 
+  onUpdatePayment,
+  onDeletePayment,
+  onUpdateExpense,
+  onDeleteExpense,
+  itemToEdit,
+  onGoToSettings 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  brides: Bride[], 
+  partners: string[], 
+  onAddPayment: (p: any) => Promise<boolean>, 
+  onAddExpense: (e: any) => Promise<boolean>,
+  onUpdatePayment?: (id: number, p: any) => Promise<boolean>,
+  onDeletePayment?: (id: number) => Promise<void>,
+  onUpdateExpense?: (id: number, e: any) => Promise<boolean>,
+  onDeleteExpense?: (id: number) => Promise<void>,
+  itemToEdit?: any,
+  onGoToSettings: () => void 
+}) => {
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [revenueSegment, setRevenueSegment] = useState<'assessoria' | 'bv'>('assessoria');
   const [formData, setFormData] = useState({
@@ -2721,6 +3047,46 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
     category: 'Geral'
   });
 
+  useEffect(() => {
+    if (itemToEdit) {
+      setType(itemToEdit.isExpense ? 'saida' : 'entrada');
+      
+      // Detecção de tipo entrada (bv vs assessoria)
+      let desc = itemToEdit.description || '';
+      let isBV = false;
+      let partner = '';
+      if (desc.startsWith('[BV]')) {
+        isBV = true;
+        const parts = desc.replace('[BV] ', '').split(' - ');
+        partner = parts[0];
+        desc = parts.slice(1).join(' - ');
+      }
+      
+      setRevenueSegment(isBV ? 'bv' : 'assessoria');
+      setFormData({
+        bride_id: !itemToEdit.bride_id ? '58' : String(itemToEdit.bride_id),
+        description: desc.replace('[MULTA] ', ''),
+        partner_name: partner,
+        amount: String(itemToEdit.amount_paid || itemToEdit.amount || 0),
+        date: itemToEdit.payment_date || itemToEdit.date || new Date().toISOString().split('T')[0],
+        status: itemToEdit.status || 'Pago',
+        category: itemToEdit.category || 'Geral'
+      });
+    } else {
+      setType('entrada');
+      setRevenueSegment('assessoria');
+      setFormData({
+        bride_id: '',
+        description: '',
+        partner_name: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        status: 'Pago',
+        category: 'Geral'
+      });
+    }
+  }, [itemToEdit, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -2730,7 +3096,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
         const selectedBride = brides.find(b => String(b.id) === String(formData.bride_id));
         const isCancellation = selectedBride?.status === 'Cancelado';
 
-        success = await onAddPayment({
+        const payload = {
           bride_id: isBV ? (formData.bride_id || 58) : formData.bride_id,
           revenue_type: isBV ? 'bv' : 'assessoria',
           description: isBV
@@ -2738,32 +3104,34 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
             : (isCancellation ? `[MULTA] ${formData.description}` : formData.description),
           amount_paid: Number(formData.amount),
           payment_date: formData.date,
-          status: 'Pago'
-        });
+          status: formData.status || 'Pago'
+        };
+
+        if (itemToEdit && onUpdatePayment) {
+          success = await onUpdatePayment(itemToEdit.id, payload);
+        } else {
+          success = await onAddPayment(payload);
+        }
       } else {
-        success = await onAddExpense({
+        const payload = {
           description: formData.description,
           amount: Number(formData.amount),
           date: formData.date,
           category: formData.category
-        });
+        };
+
+        if (itemToEdit && onUpdateExpense) {
+          success = await onUpdateExpense(itemToEdit.id, payload);
+        } else {
+          success = await onAddExpense(payload);
+        }
       }
 
       if (success) {
-        setFormData({
-          bride_id: '',
-          description: '',
-          partner_name: '',
-          amount: '',
-          date: new Date().toISOString().split('T')[0],
-          status: 'Pago',
-          category: 'Geral'
-        });
-        setRevenueSegment('assessoria');
         onClose();
       }
     } catch (error) {
-      console.error("Erro ao registrar lançamento:", error);
+      console.error("Erro ao processar lançamento:", error);
     }
   };
 
@@ -2787,8 +3155,12 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
         <div className="p-6 lg:p-8">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-black text-[#883545] uppercase tracking-widest flex items-center gap-2">
-              <Plus className={`w-6 h-6 p-1 rounded-full ${type === 'entrada' ? 'bg-[#883545] text-white' : 'bg-rose-500 text-white'}`} />
-              {type === 'entrada' ? 'Nova Receita' : 'Nova Despesa'}
+              {itemToEdit ? (
+                <Edit className={`w-6 h-6 p-1 rounded-full ${type === 'entrada' ? 'bg-[#883545] text-white' : 'bg-rose-500 text-white'}`} />
+              ) : (
+                <Plus className={`w-6 h-6 p-1 rounded-full ${type === 'entrada' ? 'bg-[#883545] text-white' : 'bg-rose-500 text-white'}`} />
+              )}
+              {itemToEdit ? 'Editar Lançamento' : (type === 'entrada' ? 'Nova Receita' : 'Nova Despesa')}
             </h3>
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <XCircle className="w-6 h-6 text-slate-300" />
@@ -2952,7 +3324,7 @@ const FinanceModal = ({ isOpen, onClose, brides, partners, onAddPayment, onAddEx
               </div>
             )}
             <button type="submit" className={`mt-4 w-full h-14 text-white font-black rounded-2xl shadow-xl transition-all text-xs uppercase tracking-widest ${type === 'entrada' ? 'bg-[#883545] shadow-[#883545]/20 hover:bg-[#883545]/90' : 'bg-rose-500 shadow-rose-500/20 hover:bg-rose-600'}`}>
-              {type === 'entrada' ? 'LANÇAR RECEITA' : 'REGISTRAR DESPESA'}
+              {itemToEdit ? 'CONFIRMAR ALTERAÇÃO' : (type === 'entrada' ? 'LANÇAR RECEITA' : 'REGISTRAR DESPESA')}
             </button>
           </form>
         </div>
@@ -4505,32 +4877,38 @@ export default function App() {
     };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-    const res = await fetch(url, { ...options, headers });
+    try {
+      const res = await fetch(url, { ...options, headers });
 
-    // Se token expirou, tenta renovar com refresh token
-    if (res.status === 401) {
-      const refreshToken = localStorage.getItem('wedding_refresh_token');
-      if (refreshToken) {
-        const refreshRes = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken })
-        });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          localStorage.setItem('wedding_token', refreshData.access_token);
-          localStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
-          setAuthToken(refreshData.access_token);
-          // Retry a requisição original com novo token
-          headers['Authorization'] = `Bearer ${refreshData.access_token}`;
-          return fetch(url, { ...options, headers });
+      // Se token expirou, tenta renovar com refresh token
+      if (res.status === 401) {
+        const refreshToken = localStorage.getItem('wedding_refresh_token');
+        if (refreshToken) {
+          console.log('[Auth] Token expirado, tentando refresh...');
+          const refreshRes = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken })
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            localStorage.setItem('wedding_token', refreshData.access_token);
+            localStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
+            setAuthToken(refreshData.access_token);
+            // Retry a requisição original com novo token
+            headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+            return fetch(url, { ...options, headers });
+          }
         }
+        // Não conseguiu renovar: faz logout
+        handleLogout();
+        return res;
       }
-      // Não conseguiu renovar: faz logout
-      handleLogout();
       return res;
+    } catch (error: any) {
+      console.error(`[authFetch ERROR] URL: ${url}`, error);
+      throw error;
     }
-    return res;
   };
 
   // Salva perfil (sem senha) no localStorage para persistir nome/preferências
@@ -4701,14 +5079,21 @@ export default function App() {
         }
         return savedBride;
       } else {
-        const errorData = await res.json();
+        const contentType = res.headers.get("content-type");
+        let errorData: any = {};
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          errorData = await res.json();
+        } else {
+          const text = await res.text();
+          errorData = { message: "Resposta não é JSON", details: text.substring(0, 100) };
+        }
         console.error('Erro ao salvar cliente:', errorData);
         showAlert('Erro ao Salvar', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
         return null;
       }
     } catch (e: any) {
       console.error('[handleSaveBride Error]', e);
-      showAlert('Erro Inesperado', `Erro: ${e.message}`);
+      showAlert('Erro Inesperado', `O servidor não respondeu (Failed to fetch). Verifique se o servidor local está rodando. Detalhe: ${e.message}`);
       return null;
     }
   };
@@ -4755,6 +5140,92 @@ export default function App() {
       showAlert('Erro de Conexão', 'Erro de conexão ao tentar registrar despesa.');
       return false;
     }
+  };
+
+  const handleUpdatePayment = async (id: number, paymentData: any) => {
+    try {
+      const res = await authFetch(`/api/payments/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(paymentData)
+      });
+      if (res.ok) {
+        await fetchData();
+        showAlert('Pagamento', 'Pagamento atualizado com sucesso! ✓');
+        return true;
+      } else {
+        const errorData = await res.json();
+        showAlert('Erro', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        return false;
+      }
+    } catch (e) {
+      console.error(e);
+      showAlert('Erro', 'Erro de conexão.');
+      return false;
+    }
+  };
+
+  const handleDeletePayment = async (id: number) => {
+    showConfirm(
+      "Excluir Lançamento",
+      "Tem certeza que deseja excluir este pagamento?",
+      async () => {
+        try {
+          const res = await authFetch(`/api/payments/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            await fetchData();
+            showAlert('Sucesso', 'Pagamento excluído com sucesso! ✓');
+          } else {
+            showAlert('Erro', 'Erro ao excluir pagamento.');
+          }
+        } catch (e) {
+          console.error(e);
+          showAlert('Erro', 'Erro de conexão.');
+        }
+      }
+    );
+  };
+
+  const handleUpdateExpense = async (id: number, expenseData: any) => {
+    try {
+      const res = await authFetch(`/api/expenses/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(expenseData)
+      });
+      if (res.ok) {
+        await fetchData();
+        showAlert('Despesa', 'Despesa atualizada com sucesso! ✓');
+        return true;
+      } else {
+        const errorData = await res.json();
+        showAlert('Erro', `Erro: ${errorData.message || errorData.error || 'Erro desconhecido'}`);
+        return false;
+      }
+    } catch (e) {
+      console.error(e);
+      showAlert('Erro', 'Erro de conexão.');
+      return false;
+    }
+  };
+
+  const handleDeleteExpense = async (id: number) => {
+    showConfirm(
+      "Excluir Despesa",
+      "Tem certeza que deseja excluir esta despesa?",
+      async () => {
+        try {
+          const res = await authFetch(`/api/expenses/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            await fetchData();
+            showAlert('Sucesso', 'Despesa excluída com sucesso! ✓');
+          } else {
+            showAlert('Erro', 'Erro ao excluir despesa.');
+          }
+        } catch (e) {
+          console.error(e);
+          showAlert('Erro', 'Erro de conexão.');
+        }
+      }
+    );
   };
 
   const handleUpdateBrideStatus = async (id: number, status: string, options: any = {}) => {
@@ -5035,6 +5506,10 @@ export default function App() {
                       settings={settings}
                       onAddPayment={handleAddPayment}
                       onAddExpense={handleAddExpense}
+                      onUpdatePayment={handleUpdatePayment}
+                      onDeletePayment={handleDeletePayment}
+                      onUpdateExpense={handleUpdateExpense}
+                      onDeleteExpense={handleDeleteExpense}
                       onGoToSettings={() => {
                         setSettingsSubTab('services');
                         handleTabChange('settings');

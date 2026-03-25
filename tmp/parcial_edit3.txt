@@ -1,0 +1,42 @@
+## CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORIA PARCIAL
+
+**IDENTIFICAÇÃO DAS PARTES**
+
+
+CONTRATANTE: {{cliente_nome}}, {{cliente_nacionalidade}}, {{cliente_estado_civil}}, {{cliente_profissao}}, Carteira de Identidade nº {{cliente_rg}} e CPF: {{cliente_cpf}}, {{cliente_genero_nascido}} em {{cliente_nascimento}}; residente e {{cliente_genero_domiciliado}}: {{cliente_endereco}}, Bairro: {{cliente_bairro}} CEP: {{cliente_cep}}, {{cliente_cidade}} - {{cliente_estado}}; Telefone: {{cliente_telefone}}.
+CONTRATADA: Vanessa Bidinotti Vicente, inscrita no CNPJ sob nº 62.301.862/0001-01, com sede na Av. 
+Ítalo Brasileiro Piva, nº 31, Bairro: Picanço, CEP: 07080-020, Guarulhos/SP, doravante denominada “Vanessa 
+Bidinotti – Assessoria e Cerimonial”, neste ato representada por sua titular Vanessa Bidinotti Vicente, brasileira, 
+casada, Assessora de Eventos, portadora da Cédula de Identidade RG nº 43.101.892-3 e CPF nº 336.015.018-
+05, telefone: (11) 98010-5982.
+As  partes  identificadas  acima  têm,  entre  si,  justo  e  acertado  o  presente  Contrato  de  Prestação  de 
+Serviços,  que  se  regerá  pelas  cláusulas  seguintes  e  pelas  condições  de  preço,  forma  e  termo  de 
+pagamento descritas no presente.
+DO OBJETO DO CONTRATO
+Cláusula 1ª. É objeto do presente contrato a prestação do serviço de Assessoria Parcial e Cerimonial, para 
+o evento do CONTRATANTE com {{noivo_nome}}, que se realizará no dia {{data_evento}} 
+contendo {{duracao_evento}} sendo 1 (uma) hora aproximadamente de cerimonia e o restante de festa. 
+{{descricao_locais}}.  Evento para {{quantidade_convidados}} convidados.  A equipe contratada permanecerá no(s) local(is) durante o período.
+OBRIGAÇÕES DO CONTRATANTE
+Cláusula 2ª. O CONTRATANTE deverá fornecer a CONTRATADA:  
+Parágrafo  primeiro:  todas  as  informações  necessárias  à  realização  do  serviço,  devendo  especificar  os 
+detalhes necessários à perfeita consecução do mesmo, e a forma de como ele deve ser entregue.
+Parágrafo segundo: o fornecimento de alimentação sendo almoço/jantar para toda a equipe de assessoria 
+contratada, preferencialmente em local separado ao dos convidados. 
+Parágrafo terceiro: uma vaga para automóvel isenta de custo.
+Cláusula  3ª. O  CONTRATANTE  deverá  efetuar  o  pagamento  na  forma  e  condições  estabelecidas  na 
+cláusula 7ª.
+OBRIGAÇÕES DA CONTRATADA
+Cláusula 4ª. A CONTRATADA deverá entregar ao CONTRATANTE os seguintes serviços:
+Parágrafo único. Assessoria Parcial e Cerimonial, composta dos seguintes itens:
+1.   Planejamento do evento, para conhecer o perfil dos noivos, suas expectativas e sonhos. Não havendo 
+a possibilidade de reunião física, a mesma poderá ser realizada por     meio     de      contatos      de      
+email, telefone      ou      vídeo conferência. 
+2.   Orientação, acompanhamento, sugestões e indicações sobre os itens restantes a serem contratados 
+com empresas idôneas e profissionais.
+3.   Reunião com os clientes para elaboração de cronograma da cerimônia e recepção. 4 – Conferência de 
+todos os itens contratados, bem como contato com fornecedores. (conforme informações fornecidas 
+pelo cliente).
+4.   Supervisão da montagem do evento, coordenando todos os profissionais e produtos contratados.
+5.   Coordenação do cerimonial:
+  Orientação na entrada e saída de todos que farão parte do cerimonial;
