@@ -15,8 +15,9 @@ import DoughnutChart from './DoughnutChart';
 import VolumeValorBarChart from './VolumeValorBarChart';
 import OcupacaoAgendaBarChart from './OcupacaoAgendaBarChart';
 import GhostLinesChart from './GhostLinesChart';
-import {
-  Users,
+import CRMView from './CRMView';
+import { 
+  Users, 
   TrendingUp,
   TrendingDown,
   Clock,
@@ -54,7 +55,8 @@ import {
   Copy,
   ChevronRight,
   Save,
-  AlertCircle
+  AlertCircle,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -5358,6 +5360,7 @@ export default function App() {
           <nav className="flex-1 space-y-2">
             <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
             <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => handleTabChange('brides')} />
+            <SidebarItem icon={MessageSquare} label="CRM / Leads" active={activeTab === 'crm'} onClick={() => handleTabChange('crm')} />
             <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => handleTabChange('finance')} />
             <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
           </nav>
@@ -5516,6 +5519,7 @@ export default function App() {
                       }}
                     />
                   )}
+                  {/* CRM desativado pra Vercel */}
                   {activeTab === 'settings' && (
                     <SettingsView
                       key={`settings-${settingsSubTab}`}

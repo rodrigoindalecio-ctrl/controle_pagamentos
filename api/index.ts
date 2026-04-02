@@ -1,9 +1,11 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import path from "path";
-import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
 import { zapsignService } from "./zapsignService.js";
+// Dependências excluídas para Vercel Deploy
 
 dotenv.config();
 
@@ -570,6 +572,57 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
         res.status(500).json({ error: "Failed to fetch stats" });
     }
 });
+
+// --- Módulo de Marketing / CRM ---
+app.get("/api/leads", requireAuth, async (req, res) => {
+    try {
+        // Usa supabaseAdmin para bypassar RLS — a rota já é protegida pelo requireAuth
+        const { data, error } = await supabaseAdmin
+            .from('marketing_leads')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
+        if (error) {
+            if (error.code === '42P01') return res.json([]);
+            throw error;
+        }
+        console.log(`[CRM] /api/leads → ${data?.length || 0} leads retornados`);
+        res.json(data);
+    } catch (error) {
+        console.error("[CRM] Erro ao buscar leads:", error);
+        res.status(500).json({ error: "Erro ao buscar leads" });
+    }
+});
+
+app.post("/api/leads/sync", requireAuth, async (req, res) => {
+    // Funcionalidade desativada nesse servidor
+    res.status(403).json({ error: "Use o aplicativo CRM Localhost", count: 0 });
+});
+
+app.patch("/api/leads/:id/status", requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        // Prepara dados pra update. Se for uma fase de msg, marca a hora.
+        const updatePayload: any = { status };
+        if (status.includes('msg')) {
+            updatePayload.last_msg_at = new Date().toISOString();
+        }
+
+        // Usa supabaseAdmin para bypassar RLS
+        const { error } = await supabaseAdmin
+            .from('marketing_leads')
+            .update(updatePayload)
+            .eq('id', id);
+            
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Erro ao atualizar status" });
+    }
+});
+
+// Rotas de disparo via Whatsapp desativadas neste host de pagamentos.
 
 const pureNum = (val: any) => {
     if (typeof val === 'number') return val;
