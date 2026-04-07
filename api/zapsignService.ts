@@ -324,7 +324,7 @@ export const zapsignService = {
             signers: [
                 {
                     name: "Vanessa Bidinotti",
-                    email: "vanessabidinotti@hotmail.com", 
+                    email: "contato@vanessabidinotti.com.br",
                     auth_mode: "signature",
                     send_email: true,
                     order: 1
