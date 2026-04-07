@@ -15,7 +15,6 @@ import DoughnutChart from './DoughnutChart';
 import VolumeValorBarChart from './VolumeValorBarChart';
 import OcupacaoAgendaBarChart from './OcupacaoAgendaBarChart';
 import GhostLinesChart from './GhostLinesChart';
-import CRMView from './CRMView';
 import { 
   Users, 
   TrendingUp,
@@ -55,8 +54,7 @@ import {
   Copy,
   ChevronRight,
   Save,
-  AlertCircle,
-  MessageSquare
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -5360,7 +5358,6 @@ export default function App() {
           <nav className="flex-1 space-y-2">
             <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
             <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => handleTabChange('brides')} />
-            <SidebarItem icon={MessageSquare} label="CRM / Leads" active={activeTab === 'crm'} onClick={() => handleTabChange('crm')} />
             <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => handleTabChange('finance')} />
             <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
           </nav>
