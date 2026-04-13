@@ -313,10 +313,28 @@ export const zapsignService = {
 
         const clientName = signerType === 'noiva' ? contract.brides.name : contract.brides.spouse_name;
         const clientEmail = contract.brides.email;
-
-        if (!clientEmail) throw new Error("E-mail do cliente é obrigatório para o ZapSign.");
-
         const clientPhone = (contract.brides.phone_number || "").replace(/\D/g, "");
+
+        if (!clientEmail && !clientPhone) {
+            throw new Error("É necessário fornecer ao menos o E-mail ou o WhatsApp do cliente para o ZapSign.");
+        }
+
+        // Prepara objeto do contratante (Noiva/Noivo)
+        const clientSigner: any = {
+            name: clientName,
+            auth_mode: "signature",
+            order: 2
+        };
+
+        if (clientEmail) {
+            clientSigner.email = clientEmail;
+            clientSigner.send_email = true;
+        }
+
+        if (clientPhone) {
+            clientSigner.phone_number = clientPhone;
+            clientSigner.send_automatic_whatsapp = true;
+        }
 
         const payload = {
             name: `Contrato - ${contract.brides.name}`,
@@ -329,15 +347,7 @@ export const zapsignService = {
                     send_email: true,
                     order: 1
                 },
-                {
-                    name: clientName,
-                    email: clientEmail,
-                    phone_number: clientPhone,
-                    auth_mode: "signature",
-                    send_email: true,
-                    send_automatic_whatsapp: true,
-                    order: 2
-                }
+                clientSigner
             ],
             lang: "pt-br"
         };
