@@ -299,14 +299,17 @@ export const zapsignService = {
         let isSandbox = true;
         let accountId = null;
 
-        if (userSettings?.zapsignToken) {
+        if (userSettings?.zapsignToken && userSettings.zapsignToken.trim() !== '') {
             apiToken = userSettings.zapsignToken;
-            isSandbox = userSettings.isSandbox ?? true;
+            isSandbox = !!userSettings.isSandbox; // Pega o valor do toggle, default false
+            console.log(`[ZapSign] Usando Token Pessoal. Sandbox: ${isSandbox}`);
         } else {
             const account = await this.getBestAccount();
             apiToken = account.api_key;
+            // Só é sandbox se o nome da conta contiver explicitamente 'sandbox'
             isSandbox = account.name.toLowerCase().includes('sandbox');
             accountId = account.id;
+            console.log(`[ZapSign] Usando Conta Coletiva (${account.name}). Sandbox: ${isSandbox}`);
         }
 
         const baseUrl = isSandbox ? "https://sandbox.api.zapsign.com.br/api/v1" : "https://api.zapsign.com.br/api/v1";

@@ -20,6 +20,7 @@
     "chartjs-plugin-datalabels": "^2.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "html2canvas": "^1.4.1",
     "imap-simple": "^5.1.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.446.0",

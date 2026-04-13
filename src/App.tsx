@@ -58,32 +58,65 @@ import {
   Download
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- PDF Helper ---
-const generateContractPDF = (brideName: string, text: string) => {
+const generateContractPDF = async (brideName: string, text: string) => {
   if (!text) return;
-  const doc = new jsPDF();
-  const margin = 15;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const splitText = doc.splitTextToSize(text, pageWidth - (margin * 2));
-  
-  doc.setFont("times", "normal");
-  doc.setFontSize(11);
-  
-  let y = 20;
-  const pageHeight = doc.internal.pageSize.getHeight();
-  
-  splitText.forEach((line: string) => {
-    if (y > pageHeight - 20) {
-      doc.addPage();
-      y = 20;
-    }
-    doc.text(line, margin, y);
-    y += 6;
+
+  const doc = new jsPDF({
+    orientation: 'p',
+    unit: 'mm',
+    format: 'a4',
   });
-  
-  doc.save(`Contrato_${brideName.replace(/\s+/g, '_')}.pdf`);
+
+  // Criar um elemento temporário para renderizar o HTML
+  const container = document.createElement('div');
+  container.style.width = '170mm'; // Largura aproximada da área de conteúdo A4 com margens
+  container.style.padding = '20mm';
+  container.style.backgroundColor = 'white';
+  container.style.color = 'black';
+  container.style.fontFamily = '"Times New Roman", Times, serif';
+  container.style.fontSize = '12pt';
+  container.style.lineHeight = '1.6';
+  container.style.position = 'fixed';
+  container.style.left = '-10000px'; // Esconder o elemento
+  container.style.top = '0';
+  container.style.whiteSpace = 'pre-wrap'; // Preservar quebras de linha
+
+  // Processar o texto (Markdown simples -> HTML)
+  let formattedHtml = text
+    .replace(/<center>/g, '<div style="text-align: center; width: 100%; display: block; margin: 20px 0;">')
+    .replace(/<\/center>/g, '</div>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br/>');
+
+  container.innerHTML = formattedHtml;
+  document.body.appendChild(container);
+
+  try {
+    await doc.html(container, {
+      callback: function (doc) {
+        doc.save(`Contrato_${brideName.replace(/\s+/g, '_')}.pdf`);
+      },
+      margin: [10, 10, 10, 10], // top, left, bottom, right
+      autoPaging: 'text',
+      x: 0,
+      y: 0,
+      width: 190, // largura do conteúdo no PDF
+      windowWidth: 700, // largura da "janela" de renderização do html2canvas
+      html2canvas: {
+        scale: 1, // Escala de renderização (1 para 72dpi, pode ser maior para mais detalhes)
+        useCORS: true,
+        logging: false,
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao gerar PDF:', error);
+  } finally {
+    document.body.removeChild(container);
+  }
 };
 
 // --- Types & Interfaces ---
