@@ -1036,6 +1036,82 @@ app.delete("/api/expenses/:id", requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
+// --- Rotas de Contas ZapSign (Compartilhadas) ---
+
+app.get("/api/zapsign/accounts", requireAuth, async (req, res) => {
+    const { data, error } = await supabase
+        .from("zapsign_accounts")
+        .select("*")
+        .order("created_at", { ascending: true });
+    
+    if (error) return res.status(500).json(error);
+
+    // Mascarar o token antes de enviar ao front
+    const masked = data.map(acc => ({
+        ...acc,
+        api_key: acc.api_key ? `${acc.api_key.substring(0, 4)}****************${acc.api_key.substring(acc.api_key.length - 4)}` : ''
+    }));
+
+    res.json(masked);
+});
+
+app.post("/api/zapsign/accounts", requireAuth, async (req, res) => {
+    const { name, api_key, monthly_limit } = req.body;
+    const { data, error } = await supabase
+        .from("zapsign_accounts")
+        .insert([{
+            name,
+            api_key,
+            monthly_limit: Number(monthly_limit) || 3,
+            monthly_used: 0,
+            active: true
+        }])
+        .select()
+        .single();
+    
+    if (error) return res.status(500).json(error);
+    res.json(data);
+});
+
+app.put("/api/zapsign/accounts/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { name, api_key, monthly_limit, monthly_used, active } = req.body;
+    
+    const updateData: any = { name, monthly_limit, monthly_used, active };
+
+    // Só atualiza o token se ele não vier mascarado
+    if (api_key && !api_key.includes('*')) {
+        updateData.api_key = api_key;
+    }
+
+    const { data, error } = await supabase
+        .from("zapsign_accounts")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+    
+    if (error) return res.status(500).json(error);
+    res.json(data);
+});
+
+app.delete("/api/zapsign/accounts/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { error } = await supabase.from("zapsign_accounts").delete().eq("id", id);
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
+});
+
+app.post("/api/zapsign/accounts/reset", requireAuth, async (req, res) => {
+    const { error } = await supabase
+        .from("zapsign_accounts")
+        .update({ monthly_used: 0 })
+        .neq("id", "00000000-0000-0000-0000-000000000000"); // Update all
+    
+    if (error) return res.status(500).json(error);
+    res.json({ success: true });
+});
+
 // --- Rotas de Contratos ---
 
 app.get("/api/contract-templates", requireAuth, async (req, res) => {
@@ -1083,10 +1159,10 @@ app.post("/api/contracts/:id/send", requireAuth, async (req, res) => {
     console.log(`[ZapSign] Configurações encontradas:`, { hasToken: !!userSettings.zapsignToken, isSandbox: userSettings.isSandbox });
 
     try {
-        const result = await zapsignService.sendToZapSign(id, signer_type, {
+        const result = await zapsignService.sendToZapSign(id, signer_type, userSettings.zapsignToken ? {
             zapsignToken: userSettings.zapsignToken,
             isSandbox: userSettings.isSandbox
-        });
+        } : undefined);
         console.log(`[ZapSign] Documento criado com sucesso: ${result.open_id}`);
         res.json(result);
     } catch (err: any) {

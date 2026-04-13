@@ -54,9 +54,37 @@ import {
   Copy,
   ChevronRight,
   Save,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { motion, AnimatePresence } from 'motion/react';
+
+// --- PDF Helper ---
+const generateContractPDF = (brideName: string, text: string) => {
+  if (!text) return;
+  const doc = new jsPDF();
+  const margin = 15;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const splitText = doc.splitTextToSize(text, pageWidth - (margin * 2));
+  
+  doc.setFont("times", "normal");
+  doc.setFontSize(11);
+  
+  let y = 20;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  splitText.forEach((line: string) => {
+    if (y > pageHeight - 20) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(line, margin, y);
+    y += 6;
+  });
+  
+  doc.save(`Contrato_${brideName.replace(/\s+/g, '_')}.pdf`);
+};
 
 // --- Types & Interfaces ---
 
@@ -1617,6 +1645,10 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpe
     }
   };
 
+  const handleDownloadPDF = () => {
+    generateContractPDF(bride.name, previewText);
+  };
+
   if (!isOpen || !bride) return null;
 
   return (
@@ -1684,8 +1716,14 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpe
                 value={previewText}
                 onChange={(e) => setPreviewText(e.target.value)}
               />
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col lg:flex-row gap-4 pt-4">
                 <button onClick={() => setStep('select')} className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">Voltar</button>
+                <button
+                  onClick={handleDownloadPDF}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Baixar PDF
+                </button>
                 <button
                   onClick={handleCreateAndSend}
                   disabled={isSending}
@@ -1706,7 +1744,12 @@ const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpe
                 <h3 className="text-2xl font-black text-slate-800">Contrato Disponível!</h3>
                 <p className="text-slate-500 max-w-sm mx-auto mt-2">Uma nova aba foi aberta para você realizar a sua assinatura. Após você assinar, o cliente receberá o link automaticamente.</p>
               </div>
-              <button onClick={onClose} className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Fechar Janela</button>
+              <div className="flex flex-col gap-3 max-w-sm mx-auto">
+                <button onClick={handleDownloadPDF} className="w-full py-4 bg-white text-[#883545] border-2 border-[#883545] rounded-2xl font-black uppercase tracking-widest hover:bg-[#883545]/5 transition-all flex items-center justify-center gap-2">
+                  <Download className="w-5 h-5" /> Baixar Cópia em PDF
+                </button>
+                <button onClick={onClose} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Fechar Janela</button>
+              </div>
             </div>
           )}
         </div>
@@ -1945,6 +1988,28 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [brideForModal, setBrideForModal] = useState<Bride | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState<number | null>(null);
+
+  const handleDownloadLatestContract = async (bride: Bride) => {
+    setIsDownloading(bride.id);
+    try {
+      const res = await authFetch('/api/contracts');
+      if (res.ok) {
+        const contracts = await res.json();
+        const latest = contracts.find((c: any) => c.bride_id === bride.id);
+        if (latest) {
+          generateContractPDF(bride.name, latest.generated_text);
+        } else {
+          showAlert('Contrato não encontrado', 'Ainda não foi gerado um contrato para este cliente.');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      showAlert('Erro', 'Ocorreu um erro ao buscar o contrato.');
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   useEffect(() => {
     const handleOpenContract = (e: any) => {
@@ -2294,6 +2359,13 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                         <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                           <XCircle className="w-3.5 h-3.5" /> Cancelar
                         </button>
+                        <button 
+                          onClick={() => { handleDownloadLatestContract(bride); setOpenMenuId(null); }} 
+                          disabled={isDownloading === bride.id}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" /> {isDownloading === bride.id ? 'Buscando...' : 'Baixar Contrato (PDF)'}
+                        </button>
                         <div className="h-px bg-slate-50 my-1" />
                         <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" /> Excluir Cliente
@@ -2468,6 +2540,13 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                             </button>
                             <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                               <XCircle className="w-3.5 h-3.5" /> Cancelar
+                            </button>
+                            <button 
+                              onClick={() => { handleDownloadLatestContract(bride); setOpenMenuId(null); }} 
+                              disabled={isDownloading === bride.id}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" /> {isDownloading === bride.id ? 'Baixando...' : 'Baixar Contrato (PDF)'}
                             </button>
                             <div className="h-px bg-slate-50 my-1" />
                             <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
@@ -3333,13 +3412,78 @@ const FinanceModal = ({
   );
 };
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>(initialTab);
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system' | 'zapSignAccounts', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system' | 'zapSignAccounts'>(initialTab as any);
+  const [zapAccounts, setZapAccounts] = useState<any[]>([]);
+  const [isZapModalOpen, setIsZapModalOpen] = useState(false);
+  const [editingZap, setEditingZap] = useState<any>(null);
+  const [zapLoading, setZapLoading] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
   const [passMessage, setPassMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSavingAll, setIsSavingAll] = useState(false);
+
+  const fetchZapAccounts = async () => {
+    setZapLoading(true);
+    try {
+      const res = await fetch('/api/zapsign/accounts', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) setZapAccounts(await res.json());
+    } catch (e) { console.error(e); }
+    finally { setZapLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'zapSignAccounts') fetchZapAccounts();
+  }, [activeTab]);
+
+  const handleSaveZapAccount = async (acc: any) => {
+    try {
+      const isEdit = !!acc.id;
+      const url = isEdit ? `/api/zapsign/accounts/${acc.id}` : '/api/zapsign/accounts';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+        body: JSON.stringify(acc)
+      });
+      if (res.ok) {
+        fetchZapAccounts();
+        setIsZapModalOpen(false);
+        setEditingZap(null);
+        showAlert('Sucesso', 'Conta ZapSign salva com sucesso! ✓');
+      }
+    } catch (e) {
+      console.error(e);
+      showAlert('Erro', 'Erro ao salvar conta ZapSign.');
+    }
+  };
+
+  const handleDeleteZapAccount = (id: string) => {
+    showConfirm("Excluir Conta", "Tem certeza que deseja remover esta conta ZapSign?", async () => {
+      try {
+        const res = await fetch(`/api/zapsign/accounts/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) fetchZapAccounts();
+      } catch (e) { console.error(e); }
+    });
+  };
+
+  const handleResetQuotas = () => {
+    showConfirm("Zerar Saldo", "Deseja zerar o contador de TODAS as contas para o novo mês?", async () => {
+      try {
+        const res = await fetch('/api/zapsign/accounts/reset', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) fetchZapAccounts();
+      } catch (e) { console.error(e); }
+    });
+  };
 
   const handleSaveAll = async () => {
     setIsSavingAll(true);
@@ -3419,15 +3563,136 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
             <TrendingUp className="w-5 h-5" /> Metas & Regras
           </button>
           <button
-            onClick={() => setActiveTab('system')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'system' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
+            onClick={() => setActiveTab('zapSignAccounts')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'zapSignAccounts' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
           >
-            <Settings className="w-5 h-5" /> Sistema
+            <ShieldCheck className="w-5 h-5" /> Contas ZapSign
           </button>
         </div>
 
         {/* Content Area */}
+        {/* Content Area */}
         <div className="flex-1 bg-white p-6 lg:p-10 rounded-3xl border border-[#883545]/10 shadow-sm min-h-[500px]">
+          {activeTab === 'zapSignAccounts' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Contas ZapSign</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gerencie seus tokens e limites de contrato</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleResetQuotas} className="px-4 py-2 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-200 hover:bg-amber-100 transition-all">
+                    Zerar Mês
+                  </button>
+                  <button onClick={() => { setEditingZap(null); setIsZapModalOpen(true); }} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Nova Conta
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {zapAccounts.map(acc => {
+                  const used = acc.monthly_used || 0;
+                  const limit = acc.monthly_limit || 3;
+                  const pct = Math.min(100, (used / limit) * 100);
+                  const isFull = used >= limit;
+
+                  return (
+                    <div key={acc.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-4 relative overflow-hidden group">
+                      <div className={`absolute top-0 right-0 w-1 h-full ${isFull ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                      
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm font-black text-slate-800 uppercase">{acc.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 font-mono mt-1">{acc.api_key}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => { setEditingZap(acc); setIsZapModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 transition-colors">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDeleteZapAccount(acc.id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-end">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Uso no Mês</span>
+                          <span className={`text-xs font-black ${isFull ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {used} / {limit} contratos
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            className={`h-full ${isFull ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {zapAccounts.length === 0 && !zapLoading && (
+                <div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
+                  Nenhuma conta ZapSign cadastrada. Clique em "Nova Conta" para começar.
+                </div>
+              )}
+
+              {/* Modal de Conta ZapSign */}
+              <AnimatePresence>
+                {isZapModalOpen && (
+                  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsZapModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 lg:p-8 space-y-6">
+                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">
+                        {editingZap ? 'Editar Conta' : 'Nova Conta ZapSign'}
+                      </h3>
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const data = new FormData(e.currentTarget);
+                        handleSaveZapAccount({
+                          id: editingZap?.id,
+                          name: data.get('name'),
+                          api_key: data.get('api_key'),
+                          monthly_limit: Number(data.get('limit')) || 3,
+                          monthly_used: editingZap ? Number(data.get('used')) : 0
+                        });
+                      }} className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Identificador</label>
+                          <input name="name" defaultValue={editingZap?.name} required placeholder="Ex: Conta Principal" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-[#883545]">API Token</label>
+                          <input name="api_key" defaultValue={editingZap?.api_key} required placeholder="Token da ZapSign..." className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Limite Mensal</label>
+                            <input name="limit" type="number" defaultValue={editingZap?.monthly_limit || 3} className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
+                          </div>
+                          {editingZap && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Uso Atual</label>
+                              <input name="used" type="number" defaultValue={editingZap?.monthly_used || 0} className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-3 pt-4">
+                          <button type="button" onClick={() => setIsZapModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest">Cancelar</button>
+                          <button type="submit" className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200">Salvar Conta</button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Informações Gerais</h3>
