@@ -293,33 +293,60 @@ export const zapsignService = {
             .eq("id", contractId)
             .single();
 
-        if (contractError || !contract) throw new Error("Contrato não encontrado.");
+        if (contractError || !contract) {
+            console.error('[ZapSign] Erro ao buscar contrato:', contractError);
+            throw new Error("Contrato não encontrado no banco de dados.");
+        }
+
+        console.log(`[ZapSign Debug] Dados do Contrato:`, { 
+            id: contract.id, 
+            hasBride: !!contract.brides,
+            brideEmail: contract.brides?.email,
+            bridePhone: contract.brides?.phone_number 
+        });
+
+        // Se o Supabase não trouxe a noiva pelo join, tenta buscar manualmente
+        if (!contract.brides && contract.bride_id) {
+            console.log(`[ZapSign Debug] Join falhou. Buscando noiva ID ${contract.bride_id} manualmente...`);
+            const { data: bData } = await supabase.from("brides").select("*").eq("id", contract.bride_id).single();
+            contract.brides = bData;
+        }
+
+        if (!contract.brides) {
+            throw new Error("Não foi possível localizar os dados do cliente para este contrato.");
+        }
 
         let apiToken = "";
-        let isSandbox = true;
+        let isSandbox = false;
         let accountId = null;
 
         if (userSettings?.zapsignToken && userSettings.zapsignToken.trim() !== '') {
-            apiToken = userSettings.zapsignToken;
-            isSandbox = !!userSettings.isSandbox; // Pega o valor do toggle, default false
-            console.log(`[ZapSign] Usando Token Pessoal. Sandbox: ${isSandbox}`);
+            apiToken = userSettings.zapsignToken.trim();
+            isSandbox = !!userSettings.isSandbox;
+            console.log(`[ZapSign - 2026-04-13] Usando Token Pessoal. Sandbox: ${isSandbox}`);
         } else {
             const account = await this.getBestAccount();
-            apiToken = account.api_key;
-            // Só é sandbox se o nome da conta contiver explicitamente 'sandbox'
-            isSandbox = account.name.toLowerCase().includes('sandbox');
+            apiToken = account.api_key.trim();
+            // FORÇAR PRODUÇÃO PARA CONTAS CADASTRADAS NO BANCO
+            isSandbox = false; 
             accountId = account.id;
-            console.log(`[ZapSign] Usando Conta Coletiva (${account.name}). Sandbox: ${isSandbox}`);
+            console.log(`[ZapSign - 2026-04-13] Usando Conta Coletiva (${account.name}). URL: PRODUÇÃO`);
         }
 
         const baseUrl = isSandbox ? "https://sandbox.api.zapsign.com.br/api/v1" : "https://api.zapsign.com.br/api/v1";
+        console.log(`[ZapSign] URL Final: ${baseUrl}`);
+        console.log(`[ZapSign] Token Prefixo: ${apiToken ? apiToken.substring(0, 8) : 'MISSING'}...`);
 
-        const clientName = signerType === 'noiva' ? contract.brides.name : contract.brides.spouse_name;
-        const clientEmail = contract.brides.email;
-        const clientPhone = (contract.brides.phone_number || "").replace(/\D/g, "");
+        const brideData = Array.isArray(contract.brides) ? contract.brides[0] : contract.brides;
+        
+        const clientName = signerType === 'noiva' ? brideData.name : (brideData.spouse_name || brideData.name);
+        const clientEmail = (brideData.email || "").trim();
+        const clientPhone = (brideData.phone_number || "").replace(/\D/g, "");
+
+        console.log(`[ZapSign Debug] Signatário:`, { clientName, clientEmail, clientPhone });
 
         if (!clientEmail && !clientPhone) {
-            throw new Error("É necessário fornecer ao menos o E-mail ou o WhatsApp do cliente para o ZapSign.");
+            throw new Error("E necessario fornecer ao menos o E-mail ou o WhatsApp do cliente para o ZapSign.");
         }
 
         // Prepara objeto do contratante (Noiva/Noivo)
@@ -355,14 +382,30 @@ export const zapsignService = {
             lang: "pt-br"
         };
 
-        const response = await fetch(`${baseUrl}/docs/?api_token=${apiToken}`, {
+        console.log(`[ZapSign Request] Enviando para: ${baseUrl}/docs?api_token=${apiToken.substring(0,5)}...`);
+        
+        const response = await fetch(`${baseUrl}/docs?api_token=${apiToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Erro na API da ZapSign");
+        const resText = await response.text();
+        console.log(`[ZapSign Response Raw] Status: ${response.status}`, resText.substring(0, 200));
+
+        let result;
+        try {
+            result = JSON.parse(resText);
+        } catch (e) {
+            console.error('[ZapSign JSON Parse Error] Resposta não é JSON:', resText);
+            throw new Error(`Resposta invalida do servidor ZapSign (Status ${response.status}). Verifique o console do servidor.`);
+        }
+
+        if (!response.ok) {
+            console.error('[ZapSign API Error]', result);
+            const errMsg = result.error || result.detail || result.message || "Erro desconhecido";
+            throw new Error(`[Conta: ${accountId || 'Producao'}] ZapSign Erro: ${errMsg}`);
+        }
 
         // Atualiza contrato com os links reais
         await supabase.from("contracts").update({

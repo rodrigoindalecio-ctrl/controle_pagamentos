@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Backups de email (dados pessoais — nunca versionar)
+email_backups/
+
+# Cache de autenticação OAuth2 (token Microsoft)
+.msal-token-cache.json

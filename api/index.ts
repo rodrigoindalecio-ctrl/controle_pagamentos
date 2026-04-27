@@ -27,8 +27,12 @@ const supabaseAdmin = createClient(
 const app = express();
 app.use(express.json());
 
-// --- Middleware de Autenticação ---
+// --- Middleware de Autenticação (Apenas para Área Administrativa) ---
 const requireAuth = async (req: any, res: any, next: any) => {
+    // Pula autenticação para rotas públicas de assinatura
+    if (req.path.startsWith('/api/public/')) {
+        return next();
+    }
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
@@ -210,9 +214,9 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
         const fetchFromDate = `${targetYear - 1}-01-01`;
 
         const [pastPaymentsRes, unpaidPaymentsRes, expensesRes, bridesRes] = await Promise.all([
-            supabase.from("payments").select("*").gte("payment_date", fetchFromDate),
-            supabase.from("payments").select("*").neq("status", "pago"),
-            supabase.from("expenses").select("*").gte("date", fetchFromDate),
+            supabase.from("payments").select("id, bride_id, amount_paid, payment_date, status, description, due_date").gte("payment_date", fetchFromDate),
+            supabase.from("payments").select("id, bride_id, amount_paid, payment_date, status, description, due_date").neq("status", "pago"),
+            supabase.from("expenses").select("id, amount, date").gte("date", fetchFromDate),
             supabase.from("brides").select("id, status, balance, contract_value, event_date, original_value")
         ]);
 
@@ -617,7 +621,7 @@ app.get("/api/brides", requireAuth, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from("brides")
-            .select("*")
+            .select("id, name, email, phone_number, status, event_date, event_location, event_address, event_start_time, event_end_time, service_type, contract_value, original_value, balance, couple_type, spouse_name, guest_count, notes, created_at")
             .order("name", { ascending: true });
 
         if (error) return res.status(500).json(error);
@@ -731,7 +735,7 @@ app.get("/api/payments", requireAuth, async (req, res) => {
 
         if (error) {
             console.error("Get payments error, fallback to raw fetch:", error);
-            const { data: rawData, error: rawError } = await supabase.from("payments").select("*").order("payment_date", { ascending: false });
+            const { data: rawData, error: rawError } = await supabase.from("payments").select("id, bride_id, amount_paid, payment_date, due_date, status, description, payment_method").order("payment_date", { ascending: false });
             if (rawError) throw rawError;
             return res.json(rawData.map(p => ({ ...p, bride_name: `ID: ${p.bride_id}` })));
         }
@@ -974,7 +978,7 @@ app.delete("/api/brides/:id", requireAuth, async (req, res) => {
 app.get("/api/expenses", requireAuth, async (req, res) => {
     const { data, error } = await supabase
         .from("expenses")
-        .select("*")
+        .select("id, description, amount, date, category")
         .order("date", { ascending: false });
 
     if (error) {
@@ -1102,14 +1106,36 @@ app.delete("/api/zapsign/accounts/:id", requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-app.post("/api/zapsign/accounts/reset", requireAuth, async (req, res) => {
-    const { error } = await supabase
-        .from("zapsign_accounts")
-        .update({ monthly_used: 0 })
-        .neq("id", "00000000-0000-0000-0000-000000000000"); // Update all
+app.post("/api/zapsign/reset-personal", requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    const { data: { user: latestUser } } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const settings = latestUser?.user_metadata?.app_settings || {};
     
+    // Remove o token e o modo sandbox
+    delete settings.zapsignToken;
+    delete settings.isSandbox;
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...latestUser.user_metadata, app_settings: settings }
+    });
+
     if (error) return res.status(500).json(error);
     res.json({ success: true });
+});
+
+app.get("/api/zapsign/debug", requireAuth, async (req, res) => {
+    const tokenUser = (req as any).user;
+    const { data: { user: latestUser } } = await supabaseAdmin.auth.admin.getUserById(tokenUser.id);
+    const userSettings = latestUser?.user_metadata?.app_settings || {};
+    
+    res.json({
+        user_email: latestUser?.email,
+        has_personal_token: !!userSettings.zapsignToken,
+        personal_token_preview: userSettings.zapsignToken ? `${userSettings.zapsignToken.substring(0, 8)}...` : null,
+        personal_is_sandbox: userSettings.isSandbox,
+        node_env: process.env.NODE_ENV,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // --- Rotas de Contratos ---
@@ -1138,12 +1164,29 @@ app.post("/api/contracts/preview", requireAuth, async (req, res) => {
 
 app.post("/api/contracts", requireAuth, async (req, res) => {
     const { bride_id, template_id, generated_text } = req.body;
+
+    // Gera um token único para o link de assinatura do cliente
+    const signature_token = `${Date.now().toString(36)}${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+
     const { data, error } = await supabase.from("contracts").insert([{
         bride_id,
         template_id,
         generated_text,
-        status: 'draft'
+        status: 'draft',
+        signature_token
     }]).select().single();
+
+    if (error) return res.status(500).json(error);
+    res.json(data);
+});
+
+app.get("/api/contracts/:id/signatures", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const { data, error } = await supabase
+        .from("signatures")
+        .select("id, contract_id, signer_name, signer_type, signer_email, signer_phone, signer_location, ip_address, user_agent, auth_token, signed_at")
+        .eq("contract_id", id)
+        .order("signed_at", { ascending: true });
 
     if (error) return res.status(500).json(error);
     res.json(data);
@@ -1151,12 +1194,15 @@ app.post("/api/contracts", requireAuth, async (req, res) => {
 
 app.post("/api/contracts/:id/send", requireAuth, async (req, res) => {
     const { id } = req.params;
-    const { signer_type } = req.body; // 'noiva' ou 'noivo'
-    const user = (req as any).user;
-    const userSettings = user?.user_metadata?.app_settings || {};
+    const { signer_type } = req.body;
+    const tokenUser = (req as any).user;
 
-    console.log(`[ZapSign] Iniciando envio do contrato ${id} para o usuário: ${user?.email}`);
-    console.log(`[ZapSign] Configurações encontradas:`, { hasToken: !!userSettings.zapsignToken, isSandbox: userSettings.isSandbox });
+    // BUSCA METADADOS ATUALIZADOS DO BANCO (Evita dados obsoletos do token/sessão)
+    const { data: { user: latestUser }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(tokenUser.id);
+    const userSettings = latestUser?.user_metadata?.app_settings || {};
+
+    console.log(`[ZapSign] Iniciando envio do contrato ${id} para: ${latestUser?.email}`);
+    console.log(`[ZapSign] Configurações Atuais:`, { hasPersonalToken: !!userSettings.zapsignToken, isSandbox: userSettings.isSandbox });
 
     try {
         const result = await zapsignService.sendToZapSign(id, signer_type, userSettings.zapsignToken ? {
@@ -1166,17 +1212,129 @@ app.post("/api/contracts/:id/send", requireAuth, async (req, res) => {
         console.log(`[ZapSign] Documento criado com sucesso: ${result.open_id}`);
         res.json(result);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        console.error('[ZapSign Error Handler]', err);
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(500).json({ 
+            error: err.message || "Erro interno no servidor ZapSign"
+        });
     }
 });
 
 app.get("/api/contracts", requireAuth, async (req, res) => {
     const { data, error } = await supabase
         .from("contracts")
-        .select(`*, brides(name)`)
+        .select(`id, status, created_at, signature_token, signer_type, brides(name)`)
         .order("created_at", { ascending: false });
     if (error) return res.status(500).json(error);
     res.json(data);
+});
+
+// --- Rotas Públicas de Assinatura (Acessíveis via Token Secreto) ---
+
+app.get("/api/public/contract/:token", async (req, res) => {
+    const { token } = req.params;
+    
+    // Busca o contrato pelo token secreto
+    const { data: contract, error } = await supabase
+        .from("contracts")
+        .select(`
+            *,
+            brides (*)
+        `)
+        .eq("signature_token", token)
+        .single();
+
+    if (error || !contract) {
+        return res.status(404).json({ error: "Contrato não encontrado ou link expirado." });
+    }
+
+    // Retorna apenas dados necessários para a noiva
+    res.json({
+        id: contract.id,
+        generated_text: contract.generated_text,
+        status: contract.status,
+        bride_name: contract.brides?.name,
+        event_date: contract.brides?.event_date,
+        signer_type: contract.signer_type || 'noiva'
+    });
+});
+
+app.post("/api/public/contract/:token/sign", async (req, res) => {
+    const { token } = req.params;
+    const { signature_image, signer_name, signer_type, signer_email, signer_phone, location, initials_image } = req.body;
+    
+    // 1. Valida o contrato
+    const { data: contract, error: cError } = await supabase
+        .from("contracts")
+        .select("id, status")
+        .eq("signature_token", token)
+        .single();
+
+    if (cError || !contract) return res.status(404).json({ error: "Contrato n\u00e3o encontrado." });
+    if (contract.status === 'signed' || contract.status === 'completed') {
+        return res.status(400).json({ error: "Este contrato j\u00e1 foi assinado." });
+    }
+
+    // 2. Registra a assinatura - usa supabaseAdmin (service_role) para bypassar RLS
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    // Payload base - colunas que existem com certeza
+    const signaturePayload: Record<string, any> = {
+        contract_id: contract.id,
+        signer_name,
+        signer_type: signer_type || 'noiva',
+        signature_image,
+        ip_address: String(ip),
+        user_agent: req.headers['user-agent'],
+        auth_token: token,
+    };
+
+    // Colunas opcionais - so incluidas se enviadas para nao quebrar schemas antigos
+    if (signer_email !== undefined) signaturePayload.signer_email = signer_email;
+    if (signer_phone !== undefined) signaturePayload.signer_phone = signer_phone;
+    if (location !== undefined) signaturePayload.signer_location = location;
+    if (initials_image !== undefined) signaturePayload.initials_image = initials_image;
+
+    let { error: sError } = await supabaseAdmin
+        .from("signatures")
+        .insert([signaturePayload]);
+
+    // PGRST204 = coluna nao encontrada no schema cache (tabela ainda nao foi migrada)
+    // Fallback: tenta inserir apenas com as colunas base garantidas
+    if (sError && (sError.code === 'PGRST204' || sError.message?.includes('column'))) {
+        console.warn('[SIGNATURE] Colunas opcionais nao existem, tentando insert base...', sError.message);
+        const basePayload = {
+            contract_id: signaturePayload.contract_id,
+            signer_name: signaturePayload.signer_name,
+            signer_type: signaturePayload.signer_type,
+            signature_image: signaturePayload.signature_image,
+            ip_address: signaturePayload.ip_address,
+            user_agent: signaturePayload.user_agent,
+            auth_token: signaturePayload.auth_token,
+        };
+        const { error: sError2 } = await supabaseAdmin
+            .from("signatures")
+            .insert([basePayload]);
+        sError = sError2;
+    }
+
+    if (sError) {
+        console.error('[SIGNATURE ERROR]', JSON.stringify(sError, null, 2));
+        // Retorna o detalhe real do erro para facilitar diagnostico
+        return res.status(500).json({ 
+            error: "Erro ao salvar assinatura.",
+            detail: sError.message,
+            code: sError.code
+        });
+    }
+
+    // 3. Atualiza status do contrato
+    await supabaseAdmin
+        .from("contracts")
+        .update({ status: 'signed' })
+        .eq("id", contract.id);
+
+    res.json({ success: true });
 });
 
 export default app;
