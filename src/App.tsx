@@ -518,34 +518,46 @@ export const StatCard = ({ label, value, icon: Icon, color, trend, children }: a
               'text-3xl';
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-[#883545]/5 flex flex-col h-full hover:shadow-md transition-shadow group">
-      <div className="flex justify-between items-start mb-2 shrink-0">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{label}</span>
-        <div className={`p-2 rounded-lg ${color.replace('text-', 'bg-').split('-')[0]}-50 ${color} group-hover:scale-110 transition-transform`}>
+    <div className="bg-white p-5 rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col h-full hover:shadow-[0_10px_30px_-10px_rgba(136,53,69,0.15)] hover:border-[#883545]/20 transition-all duration-500 group relative overflow-hidden pl-7">
+      {/* Accent line on the left */}
+      <div 
+        className={`absolute left-0 top-0 bottom-0 w-1.5 group-hover:w-2 transition-all duration-500 ${!color.startsWith('text-[') ? color.replace('text-', 'bg-') : ''}`}
+        style={color.startsWith('text-[') ? { backgroundColor: color.match(/\[(.*?)\]/)?.[1] } : {}}
+      />
+      
+      {/* Decorative gradient corner */}
+      <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-[#883545]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+      
+      <div className="flex justify-between items-start mb-3 shrink-0 relative z-10">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] leading-none">{label}</span>
+        <div className={`p-2.5 rounded-xl ${color.replace('text-', 'bg-').split('-')[0]}-50/50 ${color} group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 shadow-sm`}>
           {Icon && <Icon className="size-4" />}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center items-center text-center">
-        <div className="flex items-center justify-center gap-1 w-full min-h-[40px]">
+      <div className="flex-1 flex flex-col justify-center items-center text-center relative z-10">
+        <div className="flex items-center justify-center gap-1 w-full min-h-[44px]">
           {currency && <span className="text-xs font-bold text-slate-400 mt-1">{currency}</span>}
-          <span className={`${fontSizeClass} font-black text-slate-800 leading-tight break-words`}>
+          <span className={`${fontSizeClass} font-black text-slate-900 leading-tight tracking-tight break-words group-hover:text-[#883545] transition-colors duration-500`}>
             {amount}
           </span>
         </div>
 
         {trend && (
-          <div className="flex items-center justify-center gap-1.5 mt-1">
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-50 text-emerald-600' : isNegative ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-400'}`}>
+          <div className="flex items-center justify-center gap-1.5 mt-2">
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${isPositive ? 'bg-emerald-50 text-emerald-600 shadow-[0_2px_10px_-2px_rgba(16,185,129,0.1)]' : isNegative ? 'bg-rose-50 text-rose-500 shadow-[0_2px_10px_-2px_rgba(244,63,94,0.1)]' : 'bg-slate-50 text-slate-400'}`}>
+              {isPositive && <TrendingUp className="size-2.5" />}
               {trend.split(' ')[0]}
+            </div>
+            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">
+              {trend.split(' ').slice(1).join(' ')}
             </span>
-            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">vs anterior</span>
           </div>
         )}
       </div>
 
       {children && (
-        <div className="mt-4 pt-4 border-t border-slate-50">
+        <div className="mt-4 pt-4 border-t border-slate-50 relative z-10">
           {children}
         </div>
       )}
@@ -873,7 +885,7 @@ export default function App() {
       // Busca dados essenciais em paralelo
       const [statsRes, bridesRes, paymentsRes, expensesRes, settingsRes] = await Promise.all([
         authFetch(`/api/dashboard/stats?year=${y}&month=${m}`),
-        authFetch('/api/brides'),
+        authFetch(`/api/brides?_t=${Date.now()}`),
         authFetch('/api/payments'),
         authFetch('/api/expenses'),
         authFetch('/api/settings')

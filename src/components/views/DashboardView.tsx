@@ -13,9 +13,11 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   const today = new Date();
   const forecastContratos = brides.filter(b => {
     if (!b.event_date) return false;
-    const eventDate = new Date(b.event_date);
+    const eventDate = parseDate(b.event_date);
+    if (!eventDate) return false;
     // Deve ser no futuro e estar ativo/concluído
-    if (!(eventDate > today && (b.status === 'Ativa' || b.status === 'Concluído'))) return false;
+    today.setHours(0, 0, 0, 0); // Zera a hora de hoje para comparar apenas a data
+    if (!(eventDate >= today && (b.status === 'Ativa' || b.status === 'Concluído'))) return false;
 
     // Deve respeitar o filtro de ano e mês
     const year = eventDate.getFullYear();
@@ -23,7 +25,23 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     if (filterMonth === 'all') return String(year) === filterYear;
     return String(year) === filterYear && String(month) === filterMonth;
   });
-  const forecastValor = forecastContratos.reduce((sum, b) => sum + (b.contract_value || 0), 0);
+  // O saldo a pagar de todos os contratos futuros do período filtrado
+  const saldoAPagarEventosFuturos = forecastContratos.reduce((sum, b) => {
+    const totalPaidForBride = payments
+      .filter(p =>
+        String(p.bride_id) === String(b.id) &&
+        (p.status || '').trim().toLowerCase() === 'pago' &&
+        Number(p.amount_paid) > 0 &&
+        p.revenue_type !== 'bv'
+      )
+      .reduce((s, p) => s + (Number(p.amount_paid) || 0), 0);
+    const contractValue = Number(b.contract_value) || 0;
+    const realBalance = Math.max(0, contractValue - totalPaidForBride);
+    return sum + realBalance;
+  }, 0);
+
+  // Faturamento Projetado = Tudo que já recebi no período + Saldo a pagar dos eventos desse período
+  const forecastValor = (stats?.monthlyRevenue || 0) + saldoAPagarEventosFuturos;
 
   // Extrai dinamicamente todos os anos em que existem eventos (no mínimo 2024 a 2026)
   const availableYears = Array.from(new Set([
@@ -41,7 +59,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   );
 
   const [showGrowthDetail, setShowGrowthDetail] = useState(false);
-  const [showPendingDetail, setShowPendingDetail] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
   const [showContractsModal, setShowContractsModal] = useState(false);
   const [showCancellationsModal, setShowCancellationsModal] = useState(false);
   const [showBVInMix, setShowBVInMix] = useState(false);
@@ -195,7 +213,10 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   paymentsInPeriod.forEach(p => {
     const amount = typeof p.amount_paid === 'number' ? p.amount_paid : parseFloat(String(p.amount_paid).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
 
-    if (String(p.bride_id) === '58') {
+    // BV: detecta por revenue_type OU por bride_id === 58
+    const isBV = p.revenue_type === 'bv' || String(p.bride_id) === '58';
+
+    if (isBV) {
       if (showBVInMix) {
         clientsWithRevenueInPeriod.add('BV');
         const key = 'BV (Bonificação)';
@@ -209,8 +230,10 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         const key = rawKey || 'Não Definido';
         mixMap.set(key, (mixMap.get(key) || 0) + amount);
       } else {
-        // Se o cliente foi apagado mas existe pagamento, agrupar em 'Outro (Recebimentos de IDs excluídos)'
-        const key = 'Outro (IDs excluídos)';
+        // Pagamento de cliente sem registro atual (dados históricos)
+        // Tenta usar o nome da noiva do próprio pagamento
+        clientsWithRevenueInPeriod.add(p.bride_id);
+        const key = 'Assessoria (Histórico)';
         mixMap.set(key, (mixMap.get(key) || 0) + amount);
       }
     }
@@ -246,6 +269,31 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
     };
   });
 
+  // Calculate balance LIVE from payments (more reliable than stored 'balance' field)
+  const pendentesBase = brides
+    .filter(b => b.status === 'Ativa' && b.event_date)
+    .map(b => {
+      // Sum all paid assessoria payments for this bride
+      const totalPaidForBride = payments
+        .filter(p =>
+          String(p.bride_id) === String(b.id) &&
+          (p.status || '').trim().toLowerCase() === 'pago' &&
+          Number(p.amount_paid) > 0 &&
+          p.revenue_type !== 'bv'
+        )
+        .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+      const contractValue = Number(b.contract_value) || 0;
+      const realBalance = Math.max(0, contractValue - totalPaidForBride);
+      return {
+        id: b.id,
+        name: b.name,
+        balance: realBalance,
+        eventDate: parseDate(b.event_date) || new Date(),
+      };
+    })
+    .filter(b => b.balance > 1)
+    .sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -255,6 +303,20 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Header title={`Olá, ${userProfile.name.split(' ')[0]}! 👋`} subtitle={`Resumo Estratégica • ${periodLabel}`} />
+          
+          <button
+            onClick={() => setShowPendingModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-full transition-colors ml-2 cursor-pointer shadow-sm active:scale-95"
+          >
+            <Clock className="w-4 h-4 text-rose-500" />
+            <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest hidden sm:inline">Alertas</span>
+            {pendentesBase.length > 0 && (
+              <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                {pendentesBase.length}
+              </span>
+            )}
+          </button>
+
           {isLoading && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -268,7 +330,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         </div>
 
         {/* Period Filter Bar */}
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#883545]/10 shadow-sm">
+        <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/60 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] hover:shadow-md transition-all duration-300">
           {/* Goal Indicator (Desktop) */}
           {filterMonth === 'all' && (
             <div className="hidden lg:flex items-center gap-3 px-4 py-1.5 bg-slate-50 rounded-xl mr-2">
@@ -315,10 +377,9 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-        {/* Left Side: All 12 Stats Cards */}
-        <div className="lg:col-span-3 space-y-4 lg:space-y-6">
-          {/* Row 1 */}
+      {/* All Stats Cards */}
+      <div className="space-y-4 lg:space-y-6">
+        {/* Row 1 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
             <StatCard
               label={`Eventos Ativos (${filterMonth === 'all' ? filterYear : months.find(m => m.value === filterMonth)?.label})`}
@@ -470,91 +531,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
             </div>
             <StatCard label="Faturamento Projetado" value={`R$ ${forecastValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="text-blue-700" />
           </div>
-        </div>
-
-        {/* Right Side: Alertas de Pendência */}
-        <div className="order-first lg:order-last">
-          <div
-            onClick={() => setShowPendingDetail(!showPendingDetail)}
-            className="bg-white p-4 lg:p-6 rounded-[2rem] shadow-sm border border-[#883545]/10 h-full cursor-pointer hover:border-[#883545]/30 transition-all select-none group"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="size-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shadow-sm transition-transform group-hover:scale-110">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-800 leading-tight">Alertas de Pendência</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Próximos recebimentos</p>
-                </div>
-              </div>
-              <motion.div animate={{ rotate: showPendingDetail ? 180 : 0 }} className="text-slate-300">
-                <ChevronDown className="size-5" />
-              </motion.div>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              {(() => {
-                const pendentesBase = brides
-                  .filter(b => b.status === 'Ativa' && Number(b.balance) > 1 && b.event_date)
-                  .map(b => ({
-                    id: b.id,
-                    name: b.name,
-                    balance: Number(b.balance),
-                    eventDate: parseDate(b.event_date) || new Date(),
-                  }))
-                  .sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
-
-                const pendentes = pendentesBase.slice(0, showPendingDetail ? 20 : 6);
-
-                if (pendentes.length === 0) {
-                  return (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-8 text-center bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
-                      <CircleDollarSign className="w-8 h-8 opacity-20 mb-2" />
-                      <p className="text-xs italic font-bold">Nenhum recebimento pendente.</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <>
-                    <div className="flex flex-col gap-4">
-                      {pendentes.map((b) => {
-                        const today = new Date();
-                        const daysLeft = Math.ceil((b.eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                        const vencendo = daysLeft <= 10 && daysLeft >= 0;
-                        return (
-                          <div key={b.id} className="flex items-center gap-3 py-3 border-b border-slate-100 last:border-none group">
-                            <div className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl shadow-sm shrink-0 leading-none ${vencendo ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
-                              <span className="text-lg font-black">{Math.max(daysLeft, 0)}</span>
-                              <span className="text-[7px] font-black uppercase tracking-tighter opacity-80 mt-0.5">DIAS</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black truncate text-slate-800 mb-1 uppercase tracking-tighter">{b.name}</p>
-                              <div className="flex flex-col gap-0.5">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">A PAGAR:</p>
-                                <p className="text-sm font-black text-[#883545]">R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                              </div>
-                            </div>
-                            {vencendo && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0"></span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {!showPendingDetail && pendentesBase.length > 3 && (
-                      <div className="text-[9px] font-black text-[#883545]/60 text-center uppercase tracking-[0.2em] pt-2 animate-bounce">
-                        + {pendentesBase.length - 3} alertas ocultos
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
       </div>
-
 
       {/* Mix de Receita por Serviço — Card expandido */}
       <div className="bg-white rounded-2xl shadow-sm border border-[#883545]/10 overflow-hidden">
@@ -729,7 +706,88 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
         brides={brides}
         filterYear={filterYear}
       />
+      <PendingModal
+        isOpen={showPendingModal}
+        onClose={() => setShowPendingModal(false)}
+        pendentes={pendentesBase.slice(0, 10)}
+      />
     </motion.div >
+  );
+};
+
+// --- Pending Modal ---
+const PendingModal = ({ isOpen, onClose, pendentes }: { isOpen: boolean, onClose: () => void, pendentes: any[] }) => {
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 lg:p-8"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white w-full max-w-lg max-h-[90vh] rounded-[2rem] shadow-xl overflow-hidden flex flex-col"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="p-5 lg:p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 shadow-sm">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-800 tracking-tight">Alertas de Pendência</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
+                  10 Próximos Recebimentos
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 lg:p-8">
+            {pendentes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-slate-400 py-12 text-center">
+                <CircleDollarSign className="w-12 h-12 opacity-20 mb-3" />
+                <p className="text-sm italic font-bold">Nenhum recebimento pendente no radar.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {pendentes.map((b) => {
+                  const today = new Date();
+                  const daysLeft = Math.ceil((b.eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const vencendo = daysLeft <= 10 && daysLeft >= 0;
+                  const atrasado = daysLeft < 0;
+                  return (
+                    <div key={b.id} className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all group">
+                      <div className={`w-14 h-14 flex flex-col items-center justify-center rounded-xl shadow-sm shrink-0 leading-none ${atrasado ? 'bg-slate-700 text-white' : vencendo ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-600'}`}>
+                        <span className="text-xl font-black">{atrasado ? '!' : Math.max(daysLeft, 0)}</span>
+                        <span className="text-[8px] font-black uppercase tracking-widest opacity-80 mt-1">{atrasado ? 'ATRASO' : 'DIAS'}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black truncate text-slate-800 mb-1.5 uppercase tracking-tighter">{b.name}</p>
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">A RECEBER:</p>
+                          <p className="text-base font-black text-[#883545]">R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                      {(vencendo || atrasado) && <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse shrink-0 shadow-sm"></span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 

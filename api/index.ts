@@ -211,23 +211,22 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
         console.log(`[DASHBOARD FETCH] Year: ${targetYear}, Month: ${queryMonth}`);
 
         // Fetch data from the beginning of the previous year to ensure we have enough context for trends
-        const fetchFromDate = `${targetYear - 1}-01-01`;
-
-        const [pastPaymentsRes, unpaidPaymentsRes, expensesRes, bridesRes] = await Promise.all([
-            supabase.from("payments").select("id, bride_id, amount_paid, payment_date, status, description, due_date").gte("payment_date", fetchFromDate),
-            supabase.from("payments").select("id, bride_id, amount_paid, payment_date, status, description, due_date").neq("status", "pago"),
-            supabase.from("expenses").select("id, amount, date").gte("date", fetchFromDate),
-            supabase.from("brides").select("id, status, balance, contract_value, event_date, original_value")
+        const [allPaymentsRes, expensesRes, bridesRes] = await Promise.all([
+            supabase.from("payments").select("id, bride_id, amount_paid, payment_date, status, description, revenue_type").order("payment_date", { ascending: false }),
+            supabase.from("expenses").select("id, amount, date").order("date", { ascending: false }),
+            supabase.from("brides").select("id, status, balance, contract_value, event_date, original_value, created_at, service_type")
         ]);
 
         if (bridesRes.error) throw bridesRes.error;
-        const brides = bridesRes.data || [];
+        if (allPaymentsRes.error) {
+            console.error("[STATS] Error fetching payments:", allPaymentsRes.error);
+            throw allPaymentsRes.error;
+        }
 
-        // Combine unique payments
-        const paymentMap = new Map();
-        (pastPaymentsRes.data || []).forEach(p => paymentMap.set(p.id, p));
-        (unpaidPaymentsRes.data || []).forEach(p => paymentMap.set(p.id, p));
-        const allPayments = Array.from(paymentMap.values());
+        const brides = bridesRes.data || [];
+        const allPayments = allPaymentsRes.data || [];
+
+        console.log(`[STATS] Loaded ${allPayments.length} payments, ${brides.length} brides`);
 
         const allExpenses = expensesRes.data || [];
 
@@ -432,6 +431,10 @@ app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
         const activeEventsY3 = strictlyActiveBrides.filter(b => parseDateRobust(b.event_date)?.y === (targetYear + 2)).length;
         const activeBridesTrend = "0%";
 
+        // When a specific month is selected, month-specific event count is often 0 (past months auto-complete).
+        // Use year-total as the main number so the card is always meaningful.
+        const activeBridesMainCount = queryMonth === 'all' ? activeEventsInPeriod : activeEventsY1;
+
 
 
         // E. CHART DATA
@@ -621,11 +624,24 @@ app.get("/api/brides", requireAuth, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from("brides")
-            .select("id, name, email, phone_number, status, event_date, event_location, event_address, event_start_time, event_end_time, service_type, contract_value, original_value, balance, couple_type, spouse_name, guest_count, notes, created_at")
+            .select("id, name, email, phone_number, status, event_date, event_location, event_address, event_start_time, event_end_time, service_type, contract_value, original_value, balance, couple_type, spouse_name, guest_count, created_at")
             .order("name", { ascending: true });
 
-        if (error) return res.status(500).json(error);
+        if (error) {
+            console.error("[API BRIDES ERROR]", error);
+            return res.status(500).json(error);
+        }
         if (!data) return res.json([]);
+
+        // DEBUG CREATED_AT
+        console.log("[DEBUG BRIDES] Total:", data.length);
+        if (data.length > 0) {
+            console.log("[DEBUG BRIDES] Amostra de created_at:");
+            data.slice(0, 3).forEach(b => {
+                console.log(`  -> ID: ${b.id}, Name: ${b.name}, created_at: ${b.created_at}`);
+            });
+        }
+
 
         // --- Lógica de Auto-Conclusão ---
         // Se a data do evento já passou e o status ainda é 'Ativa', mudamos para 'Concluído'
@@ -777,6 +793,10 @@ app.post("/api/payments", requireAuth, async (req, res) => {
     if (error) {
         console.error("Post payment error:", error);
         return res.status(500).json(error);
+    }
+
+    if (bride_id && String(bride_id) !== '58') {
+        await refreshBrideBalance(bride_id);
     }
 
     res.json(data);
