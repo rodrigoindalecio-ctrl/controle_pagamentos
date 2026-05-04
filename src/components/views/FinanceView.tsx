@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Header } from "../../App";
 import { formatDisplayDate } from "../../App";
 import { Payment, Expense, Bride, DashboardStats, AppSettings } from "../../types";

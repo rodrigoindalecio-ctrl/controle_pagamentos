@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { AppSettings, Bride, Payment, Expense, DEFAULT_SETTINGS } from "../../types";
-import { Save, AlertCircle, User, Award, CheckCircle, Clock, Plus, Trash2, Users, Calendar, Wallet, LayoutDashboard, Sparkles, LogOut, XCircle, Heart, MapPin, ChevronRight, Eye, EyeOff, TrendingUp, ShieldCheck, Settings, Edit } from "lucide-react";
+import { Save, AlertCircle, User, Award, CheckCircle, Clock, Plus, Trash2, Users, Calendar, Wallet, LayoutDashboard, Sparkles, LogOut, XCircle, Heart, MapPin, ChevronRight, Eye, EyeOff, TrendingUp, ShieldCheck, Settings, Edit, Lock } from "lucide-react";
 import { Header } from "../../App";
 
 const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system' | 'zapSignAccounts', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {

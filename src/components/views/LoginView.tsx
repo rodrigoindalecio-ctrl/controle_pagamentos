@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Heart, Lock, Mail, ArrowRight, ShieldCheck, User, XCircle, EyeOff, Eye } from "lucide-react";
 
 const LoginView = ({ onLogin, logo, companyName }: { onLogin: (user: any, token: string, refreshToken: string) => void, logo?: string, companyName: string, key?: string }) => {

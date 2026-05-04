@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Bride, Payment, AppSettings, ContractTemplate } from "../../types";
 import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus } from "lucide-react";
 import { parseDate, formatDisplayDate, generateContractPDF } from "../../App";
