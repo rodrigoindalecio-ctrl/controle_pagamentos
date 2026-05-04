@@ -4,7 +4,7 @@ import { Header } from "../../App";
 import { formatDisplayDate } from "../../App";
 import { Payment, Expense, Bride, DashboardStats, AppSettings } from "../../types";
 import { Copy, Plus, Filter, Search, CheckCircle, ChevronDown, Clock, Download, ChevronRight, FileText, AlertCircle, X, ExternalLink, RefreshCw, Calendar, MoreVertical, Edit, Trash2, XCircle } from "lucide-react";
-import { parseDate } from "../../App";
+import { parseDate, normalizeString } from "../../App";
 
 const FinanceView = ({ 
   payments, 
@@ -53,13 +53,14 @@ const FinanceView = ({
   const filteredItems = allItems
     .filter(item => {
       // Filtro de busca
-      const searchMatch = item.bride_name.toLowerCase().includes(searchTerm.toLowerCase()) || (item.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const normalizedSearch = normalizeString(searchTerm);
+      const searchMatch = normalizeString(item.bride_name).includes(normalizedSearch) || normalizeString(item.description || '').includes(normalizedSearch);
       // Filtro de tipo
       const typeMatch = typeFilter === 'Todos' || (typeFilter === 'Receita' && !item.isExpense) || (typeFilter === 'Despesa' && item.isExpense);
       // Filtro de parceiro (apenas para BV ou despesas que tenham parceiro na descrição)
       const partnerMatch = partnerFilter === 'Todos' ||
-        item.description?.toLowerCase().includes(partnerFilter.toLowerCase()) ||
-        (item as any).partner_name === partnerFilter;
+        normalizeString(item.description || '').includes(normalizeString(partnerFilter)) ||
+        normalizeString((item as any).partner_name || '').includes(normalizeString(partnerFilter));
       // Filtro de cliente
       const brideMatch = brideFilter === 'Todos' || String(item.bride_id) === brideFilter;
       // Filtro de data

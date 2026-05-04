@@ -580,6 +580,9 @@ export const formatDisplayDate = (dateStr: string | null | undefined) => {
   return d ? d.toLocaleDateString('pt-BR') : '-';
 };
 
+export const normalizeString = (str: string) => 
+  (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 // Implementação mínima de Header
 export const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   <div className="mb-4">

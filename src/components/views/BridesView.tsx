@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Bride, Payment, AppSettings, ContractTemplate } from "../../types";
 import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus } from "lucide-react";
-import { parseDate, formatDisplayDate, generateContractPDF } from "../../App";
+import { parseDate, formatDisplayDate, generateContractPDF, normalizeString } from "../../App";
 import { Header } from "../../App";
 
 // --- Brides View ---
@@ -593,9 +593,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
 
   const filteredBrides = brides.filter(b => {
     if (b.id === 58) return false; // Esconde o cliente de BV da lista
-    const matchesSearch = b.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (b.spouse_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (b.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const normalizedSearch = normalizeString(searchTerm);
+    const matchesSearch = normalizeString(b.name).includes(normalizedSearch) || 
+                          normalizeString(b.spouse_name || '').includes(normalizedSearch) ||
+                          normalizeString(b.email || '').includes(normalizedSearch) ||
                           (b.event_date ? parseDate(b.event_date)?.toLocaleDateString('pt-BR').includes(searchTerm) : false) ||
                           (b.event_date || '').includes(searchTerm);
     const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;

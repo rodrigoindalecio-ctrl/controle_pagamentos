@@ -624,7 +624,7 @@ app.get("/api/brides", requireAuth, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from("brides")
-            .select("id, name, email, phone_number, status, event_date, event_location, event_address, event_start_time, event_end_time, service_type, contract_value, original_value, balance, couple_type, spouse_name, guest_count, created_at")
+            .select("*")
             .order("name", { ascending: true });
 
         if (error) {
