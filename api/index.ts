@@ -50,7 +50,8 @@ const requireAuth = async (req: any, res: any, next: any) => {
     }
 
     // Valida o token JWT com o Supabase
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    const user = data?.user;
 
     if (error || !user) {
         console.warn(`[AUTH] Token inválido para ${req.method} ${req.path}. Erro: ${error?.message}`);
@@ -212,8 +213,13 @@ app.get("/api/public/test-ok", (req, res) => {
 // --- Rota Pública de Configurações (para branding na tela de login) ---
 app.get("/api/public/settings", async (req, res) => {
     try {
-        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
-        if (error || !users || users.length === 0) return res.json({});
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+        const users = data?.users;
+        
+        if (error || !users || users.length === 0) {
+            console.error('[API SETTINGS] Erro ao listar usuários:', error?.message);
+            return res.json({});
+        }
 
         // Pega o rodrigo ou o primeiro usuário da lista
         const owner = users.find((u: any) => u.email === 'rodrigoindalecio@hotmail.com') || users[0];
@@ -256,7 +262,8 @@ app.get("/api/settings", requireAuth, async (req, res) => {
     // Roda a verificação de backup em background (sem travar a resposta da API)
     import('./backupService').then(m => m.backupService.checkAndRunLazyBackup()).catch(() => {});
 
-    const { data: { user: latestUser }, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const latestUser = data?.user;
 
     if (error || !latestUser) return res.status(500).json({ error: 'Erro ao buscar configurações' });
     
