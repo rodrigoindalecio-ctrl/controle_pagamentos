@@ -262,7 +262,7 @@ export const autentiqueService = {
                 signers: [
                     {
                         name: "Vanessa Bidinotti",
-                        phone: "+5511976513842",
+                        phone: "+5511980105982",
                         delivery_method: "DELIVERY_METHOD_WHATSAPP",
                         action: "SIGN"
                     },

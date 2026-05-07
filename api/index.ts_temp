@@ -1,0 +1,25 @@
+import express from "express";
+import { createClient } from "@supabase/supabase-js";
+import { backupService } from "./backupService";
+import { autentiqueService } from "./autentiqueService";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Validação de variáveis de ambiente para evitar crash 500 na Vercel
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("❌ ERRO CRÍTICO: SUPABASE_URL ou SUPABASE_ANON_KEY não configurados!");
+}
+
+// Cliente padrão (anon) para operações de dados
+const supabase = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseAnonKey || "placeholder");
+
+// Cliente admin (service_role) para autenticação server-side
+const supabaseAdmin = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseServiceKey || "placeholder");
+
+const app = express();
+app.use(express.json());

@@ -1,11 +1,8 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { backupService } from "./backupService";
-import dotenv from "dotenv";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from 'url';
 import { autentiqueService } from "./autentiqueService";
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -1294,7 +1291,7 @@ app.post("/api/contracts/:id/send-autentique", requireAuth, async (req: any, res
         
         const settings = latestUser.user_metadata?.app_settings || {};
         const apiToken = settings.autentiqueToken;
-        const isSandbox = settings.isSandbox ?? false;
+        const isSandbox = false; // FORÇADO PRODUÇÃO
         
         console.log(`[API AUTENTIQUE] Passo 3: Token configurado: ${!!apiToken}, Sandbox: ${isSandbox}`);
         
@@ -1533,9 +1530,6 @@ app.get("/api/debug/reset-metadata", async (req, res) => {
         res.status(500).send("Erro: " + err.message);
     }
 });
-
-// Inicia o agendador de backup automático
-backupService.initScheduledBackup();
 
 // --- Rota de Backup Manual e Automático (Vercel Cron) ---
 app.post("/api/admin/backup/email", async (req, res) => {

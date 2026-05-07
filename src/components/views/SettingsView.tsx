@@ -824,11 +824,12 @@ export const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes,
   };
 
   const maskRG = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 9);
+    // Permite números e a letra X (maiúscula ou minúscula)
+    const d = v.replace(/[^0-9xX]/g, '').slice(0, 9);
     if (d.length <= 2) return d;
-    if (d.length <= 5) return d.replace(/(\d{2})(\d+)/, '$1.$2');
-    if (d.length <= 8) return d.replace(/(\d{2})(\d{3})(\d+)/, '$1.$2.$3');
-    return d.replace(/(\d{2})(\d{3})(\d{3})(\d)/, '$1.$2.$3-$4');
+    if (d.length <= 5) return d.replace(/(\d{2})([0-9xX]+)/, '$1.$2');
+    if (d.length <= 8) return d.replace(/(\d{2})(\d{3})([0-9xX]+)/, '$1.$2.$3');
+    return d.replace(/(\d{2})(\d{3})(\d{3})([0-9xX])/, '$1.$2.$3-$4');
   };
 
   const maskPhone = (v: string) => {
@@ -1228,15 +1229,16 @@ export const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes,
                         className="w-full rounded-xl border-slate-100 bg-white p-3 text-xs font-bold shadow-sm"
                         placeholder="000.000.000-00"
                         value={formData.spouse_cpf}
-                        onChange={(e) => setFormData({ ...formData, spouse_cpf: e.target.value })}
+                        onChange={(e) => setFormData({ ...formData, spouse_cpf: maskCPF(e.target.value) })}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[9px] font-black text-slate-400 uppercase">RG (Parceiro 2)</label>
                       <input
                         className="w-full rounded-xl border-slate-100 bg-white p-3 text-xs font-bold shadow-sm"
+                        maxLength={12}
                         value={formData.spouse_rg}
-                        onChange={(e) => setFormData({ ...formData, spouse_rg: e.target.value })}
+                        onChange={(e) => setFormData({ ...formData, spouse_rg: maskRG(e.target.value) })}
                       />
                     </div>
                   </motion.div>
