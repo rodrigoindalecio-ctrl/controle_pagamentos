@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { backupService } from "./backupService";
 import { autentiqueService } from "./autentiqueService";
 import dotenv from "dotenv";
+import path from "path";
 
 dotenv.config();
 
@@ -1564,12 +1565,11 @@ app.post("/api/admin/backup/email", async (req, res) => {
     }
 });
 
-// Função para iniciar o servidor (usada localmente)
+// Função para iniciar o servidor (usada localmente via server.ts)
 export async function startServer() {
     const rootDir = process.cwd();
 
     if (process.env.NODE_ENV !== "production") {
-        // Importação dinâmica para evitar que o Vercel tente carregar o Vite em produção
         const { createServer: createViteServer } = await import("vite");
         const vite = await createViteServer({
             server: { middlewareMode: true },
@@ -1578,9 +1578,10 @@ export async function startServer() {
         });
         app.use(vite.middlewares);
     } else {
-        app.use(express.static(path.join(rootDir, "dist")));
-        app.get("*", (req, res) => {
-            res.sendFile(path.join(rootDir, "dist", "index.html"));
+        const distPath = path.join(rootDir, "dist");
+        app.use(express.static(distPath));
+        app.get("*", (_req: any, res: any) => {
+            res.sendFile(path.join(distPath, "index.html"));
         });
     }
 

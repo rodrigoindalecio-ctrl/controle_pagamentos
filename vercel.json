@@ -2,6 +2,11 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.ts" }
   ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30
+    }
+  },
   "crons": [
     {
       "path": "/api/admin/backup/email",
