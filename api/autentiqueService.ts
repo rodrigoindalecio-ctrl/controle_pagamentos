@@ -1,8 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { jsPDF } from "jspdf";
 import axios from "axios";
-import FormData from "form-data";
 
 dotenv.config();
 
@@ -163,11 +161,13 @@ export const autentiqueService = {
      */
     async generatePDF(text: string): Promise<Buffer> {
         try {
-            // LIMPEZA: Remove tags HTML e Markdown que poluem o PDF
+            // Lazy import para evitar crash no ambiente serverless (jsPDF usa APIs de browser)
+            const { jsPDF } = await import('jspdf');
+
             const cleanText = text
                 .replace(/<center>/gi, '')
                 .replace(/<\/center>/gi, '\n')
-                .replace(/\*\*/g, '') // Remove negritos do markdown
+                .replace(/\*\*/g, '')
                 .replace(/&nbsp;/g, ' ')
                 .replace(/<br\s*\/?>/gi, '\n');
 
@@ -293,6 +293,8 @@ export const autentiqueService = {
             '0': ['variables.file']
         };
 
+        // Lazy import para evitar crash no ambiente serverless
+        const FormData = (await import('form-data')).default;
         const form = new FormData();
         form.append('operations', JSON.stringify(operations));
         form.append('map', JSON.stringify(map));
