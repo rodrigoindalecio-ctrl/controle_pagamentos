@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bride, Payment, AppSettings, ContractTemplate } from "../../types";
-import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus } from "lucide-react";
+import { Bride, Payment, AppSettings, ContractTemplate, Contract } from "../../types";
+import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus, FileCheck, RefreshCw, RotateCcw } from "lucide-react";
 import { parseDate, formatDisplayDate, generateContractPDF, normalizeString } from "../../App";
 import { Header } from "../../App";
 
@@ -91,6 +91,7 @@ export const DistratoModal = ({ isOpen, onClose, onConfirm, bride, payments, goa
   );
 };
 
+
 export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: { isOpen: boolean, onClose: () => void, bride: Bride | null, authFetch: any, showAlert: (t: string, m: string) => void }) => {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -99,6 +100,8 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
   const [isSending, setIsSending] = useState(false);
   const [step, setStep] = useState<'select' | 'preview' | 'sent'>('select');
   const [signerType, setSignerType] = useState<'noiva' | 'noivo'>('noiva');
+  const [lastClientLink, setLastClientLink] = useState('');
+  const [lastAdminLink, setLastAdminLink] = useState('');
 
   useEffect(() => {
     if (isOpen && bride) {
@@ -107,22 +110,48 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
       setSignerType((bride as any).signer_type || 'noiva');
 
       authFetch('/api/contract-templates')
-        .then((res: any) => res.json())
-        .then(data => {
-          setTemplates(data);
-          // Pré-seleção inteligente baseada no Tipo de Serviço
-          if (bride.service_type) {
-            const matched = data.find((t: any) =>
-              t.name.toLowerCase().trim() === bride.service_type.toLowerCase().trim()
-            );
-            if (matched) setSelectedTemplateId(matched.id);
-            else setSelectedTemplateId('');
-          } else {
-            setSelectedTemplateId('');
+        .then(async (res: any) => {
+          console.log(`[Templates] Status: ${res.status} ${res.statusText}`);
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Erro ${res.status}: ${errText || 'Sem corpo de erro'}`);
           }
+          
+          const text = await res.text();
+          if (!text) { 
+            console.warn('[Templates] Resposta veio sem corpo. Tentando fallback interno.');
+            setTemplates([
+              { id: 'def-1', name: 'Assessoria Completa', template_text: 'CONTRATO DE ASSESSORIA COMPLETA...' },
+              { id: 'def-2', name: 'Assessoria do Dia', template_text: 'CONTRATO DE ASSESSORIA DO DIA...' }
+            ]);
+            return; 
+          }
+          try {
+            const data = JSON.parse(text);
+            if (!Array.isArray(data)) { 
+              console.error('[Templates] Resposta não é array:', data); 
+              return; 
+            }
+            setTemplates(data);
+            
+            // Auto-seleção baseada no tipo de serviço
+            if (bride.service_type) {
+              const matched = data.find((t: any) =>
+                t.name.toLowerCase().trim() === bride.service_type.toLowerCase().trim()
+              );
+              if (matched) setSelectedTemplateId(matched.id);
+            }
+          } catch (parseErr) {
+            console.error('[Templates] Erro ao parsear JSON:', parseErr, 'Texto:', text.substring(0, 100));
+          }
+        })
+        .catch((err: any) => {
+          console.error('[Templates] Erro ao buscar templates:', err);
+          showAlert('Erro', 'Não foi possível carregar os modelos de contrato.');
         });
     }
   }, [isOpen, bride]);
+
 
   const handleGeneratePreview = async () => {
     if (!selectedTemplateId || !bride) return;
@@ -133,7 +162,15 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
         body: JSON.stringify({ template_id: selectedTemplateId, bride_id: bride.id })
       });
       const data = await res.json();
-      setPreviewText(data.rendered);
+      
+      // Limpa as tags para a prévia visual ficar bonita
+      const cleanPreview = data.rendered
+        .replace(/<center>/gi, '')
+        .replace(/<\/center>/gi, '\n')
+        .replace(/\*\*/g, '')
+        .replace(/&nbsp;/g, ' ');
+
+      setPreviewText(cleanPreview);
       setStep('preview');
     } catch (err) {
       showAlert('Erro na Prévia', 'Erro ao gerar prévia');
@@ -142,7 +179,7 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
     }
   };
 
-  const handleCreateAndSend = async () => {
+  const handleSendAutentique = async () => {
     setIsSending(true);
     try {
       // 1. Cria o contrato no banco
@@ -154,35 +191,36 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
             generated_text: previewText 
         })
       });
+      
       const contract = await saveRes.json();
-
       if (!saveRes.ok) throw new Error(contract.error || "Erro ao salvar contrato");
 
-      // 2. Gera o link interno de assinatura
-      // Usamos o signature_token que foi gerado pelo banco ou criamos um agora
-      const token = contract.signature_token || Math.random().toString(36).substring(2, 15);
-      const signLink = `${window.location.origin}/?token=${token}`;
-
-      // 3. Prepara a mensagem de WhatsApp
-      const firstSignerName = bride.name.split(' ')[0];
-      const message = `Olá ${firstSignerName}! Tudo bem? ✨\n\nFinalizei o seu contrato de ${bride.service_type}. Segue o link para você realizar a assinatura digital diretamente pelo seu celular:\n\n${signLink}\n\nQualquer dúvida estou à disposição! 💍`;
+      // 2. Envia para o Autentique (isso já dispara o WhatsApp para o cliente)
+      const autRes = await authFetch(`/api/contracts/${contract.id}/send-autentique`, {
+        method: 'POST'
+      });
       
-      const phone = (bride.phone_number || "").replace(/\D/g, "");
-      const whatsappUrl = `https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(message)}`;
+      const autResult = await autRes.json();
+      if (!autRes.ok) throw new Error(autResult.error || "Erro no Autentique");
 
-      // 4. Abre o WhatsApp e finaliza o modal
-      window.open(whatsappUrl, '_blank');
+      setLastClientLink(autResult.sign_url_client);
+      setLastAdminLink(autResult.sign_url_admin);
       setStep('sent');
-      
-      showAlert('Sucesso!', 'Link de assinatura gerado e WhatsApp aberto. O status do contrato será atualizado automaticamente assim que o cliente assinar.');
 
+      // AGILIDADE: Abre o seu link de assinatura automaticamente em uma nova aba
+      if (autResult.sign_url_admin) {
+        window.open(autResult.sign_url_admin, '_blank');
+      }
+
+      showAlert('Sucesso!', 'Contrato enviado com sucesso!');
     } catch (err: any) {
-      console.error('[Contract Error]', err);
-      showAlert('Erro no Contrato', err.message);
+      console.error('[Autentique Error]', err);
+      showAlert('Erro Autentique', err.message);
     } finally {
       setIsSending(false);
     }
   };
+
 
   const handleDownloadPDF = () => {
     generateContractPDF(bride.name, previewText);
@@ -245,11 +283,7 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
           )}
 
           {step === 'preview' && (
-            <div className="space-y-4 h-full flex flex-col">
-              <div className="flex justify-between items-end">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Confira e Edit se necessário</label>
-                <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-md uppercase tracking-widest">Modo de Edição Ativo</span>
-              </div>
+            <div className="space-y-4 h-full flex flex-col pt-4">
               <textarea
                 className="flex-1 w-full p-6 bg-slate-50 border-none rounded-2xl font-serif text-slate-700 leading-relaxed shadow-inner min-h-[400px] focus:ring-0"
                 value={previewText}
@@ -264,36 +298,480 @@ export const ContractModal = ({ isOpen, onClose, bride, authFetch, showAlert }: 
                   <Download className="w-4 h-4" /> Baixar PDF
                 </button>
                 <button
-                  onClick={handleCreateAndSend}
+                  onClick={handleSendAutentique}
                   disabled={isSending}
-                  className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                  className="flex-[2] py-4 bg-[#883545] text-white rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+                  title="Enviar para Assinatura Digital via Autentique"
                 >
-                  {isSending ? 'Enviando...' : <><Send className="w-4 h-4" /> Finalizar e Enviar para Assinatura</>}
+                  {isSending ? 'Processando...' : <><FileCheck className="w-5 h-5" /> Enviar para Assinatura</>}
                 </button>
               </div>
             </div>
           )}
 
           {step === 'sent' && (
-            <div className="py-20 text-center space-y-6">
-              <div className="size-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle className="w-12 h-12" />
+            <div className="py-12 text-center space-y-8">
+              <div className="size-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle className="w-10 h-10" />
               </div>
-              <div>
-                <h3 className="text-2xl font-black text-slate-800">Contrato Disponível!</h3>
-                <p className="text-slate-500 max-w-sm mx-auto mt-2">Uma nova aba foi aberta para você realizar a sua assinatura. Após você assinar, o cliente receberá o link automaticamente.</p>
+              
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Contrato Disponível!</h3>
+                <p className="text-slate-500 text-sm max-w-xs mx-auto">Tudo pronto! Use os botões abaixo para finalizar o processo.</p>
               </div>
-              <div className="flex flex-col gap-3 max-w-sm mx-auto">
-                <button onClick={handleDownloadPDF} className="w-full py-4 bg-white text-[#883545] border-2 border-[#883545] rounded-2xl font-black uppercase tracking-widest hover:bg-[#883545]/5 transition-all flex items-center justify-center gap-2">
-                  <Download className="w-5 h-5" /> Baixar Cópia em PDF
-                </button>
-                <button onClick={onClose} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Fechar Janela</button>
+
+              <div className="grid grid-cols-1 gap-3 max-w-sm mx-auto px-4">
+                {lastAdminLink && (
+                  <button 
+                    onClick={() => window.open(lastAdminLink, '_blank')}
+                    className="w-full py-4 bg-[#883545] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-[#883545]/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+                  >
+                    <Edit className="w-4 h-4" /> 1. Assinar Minha Parte
+                  </button>
+                )}
+
+                {lastClientLink && (
+                  <button 
+                    onClick={() => {
+                      const firstSignerName = bride?.name.split(' ')[0];
+                      const message = `Olá ${firstSignerName}! ✨\n\nAcabei de gerar o seu contrato. Segue o link para assinatura digital via Autentique:\n\n${lastClientLink}\n\nQualquer dúvida estou por aqui! 💍`;
+                      const phone = (bride?.phone_number || "").replace(/\D/g, "");
+                      const whatsappUrl = `https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(message)}`;
+                      window.open(whatsappUrl, '_blank');
+                    }}
+                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-200 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+                  >
+                    <Send className="w-4 h-4" /> 2. Enviar p/ WhatsApp da Noiva
+                  </button>
+                )}
+
+                <div className="pt-4 border-t border-slate-100 mt-2 flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      // Limpa as tags antes de baixar o PDF para ficar igual ao Autentique
+                      const cleanPdfText = previewText
+                        .replace(/<center>/gi, '')
+                        .replace(/<\/center>/gi, '\n')
+                        .replace(/\*\*/g, '')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/<br\s*\/?>/gi, '\n');
+                      generateContractPDF(bride.name, cleanPdfText);
+                    }} 
+                    className="w-full py-3 bg-slate-50 text-slate-500 rounded-xl font-bold uppercase tracking-widest text-[9px] hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Baixar Cópia PDF Limpa
+                  </button>
+                  <button onClick={onClose} className="w-full py-3 text-slate-400 font-bold uppercase tracking-widest text-[9px] hover:text-slate-600">
+                    Fechar Janela
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </motion.div>
     </div>
+  );
+};
+
+export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAlert, settings }: { isOpen: boolean, onClose: () => void, bride: Bride | null, authFetch: any, showAlert: (t: string, m: string) => void, settings: AppSettings }) => {
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showGenerationFlow, setShowGenerationFlow] = useState(false);
+  const [signaturesData, setSignaturesData] = useState<any>(null);
+  const [isLoadingSignatures, setIsLoadingSignatures] = useState(false);
+  const [showSignatures, setShowSignatures] = useState(false);
+  const [showEditPanel, setShowEditPanel] = useState(false);
+  const [editForm, setEditForm] = useState({ reminder: 'WEEKLY', deadline_at: '', message: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && bride) {
+      fetchContract(bride);
+    } else {
+      setContract(null);
+      setShowGenerationFlow(false);
+      setShowSignatures(false);
+      setShowEditPanel(false);
+      setSignaturesData(null);
+    }
+  }, [isOpen, bride]);
+
+  const fetchContract = async (currentBride: Bride) => {
+    setIsLoading(true);
+    try {
+      const res = await authFetch('/api/contracts');
+      if (res.ok) {
+        const contracts = await res.json();
+        const latest = (Array.isArray(contracts) ? contracts : []).find((c: any) =>
+          String(c.bride_id) === String(currentBride?.id)
+        );
+        if (latest) {
+          const fullRes = await authFetch(`/api/contracts/${latest.id}`);
+          if (fullRes.ok) setContract(await fullRes.json());
+        } else {
+          setContract(null);
+          // Se não tem contrato, já abre direto o fluxo de geração para poupar um clique
+          setShowGenerationFlow(true);
+        }
+      }
+    } catch (err) {
+      console.error('[ContractDetails] Erro:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleViewSignatures = async () => {
+    if (!contract?.autentique_document_id) {
+      showAlert('Aviso', 'Este contrato ainda não foi enviado para o Autentique.');
+      return;
+    }
+    setIsLoadingSignatures(true);
+    setShowSignatures(true);
+    setShowEditPanel(false);
+    try {
+      const res = await authFetch(`/api/contracts/${contract.id}/autentique-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setSignaturesData(data);
+        
+        // --- AUTO-UPDATE STATUS ---
+        // Se todos os que precisam assinar (SIGN) já assinaram, atualizamos o status no banco
+        const signers = data.signatures?.filter((s: any) => s.action?.name === 'SIGN') || [];
+        const allSigned = signers.length > 0 && signers.every((s: any) => s.signed?.created_at);
+        
+        if (allSigned && (contract.status === 'sent' || contract.status === 'visualizado' || !contract.signed_pdf_url)) {
+          console.log('[Autentique] Detectado que todos assinaram. Atualizando status e link do PDF no banco...');
+          await authFetch(`/api/contracts/${contract.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              status: 'completed',
+              signed_pdf_url: data.files?.signed
+            })
+          });
+          // Recarrega o contrato para atualizar o header do modal
+          fetchContract(bride!);
+        }
+      } else {
+        const err = await res.json();
+        showAlert('Erro', err.error || 'Erro ao consultar Autentique');
+        setShowSignatures(false);
+      }
+    } catch (err: any) {
+      showAlert('Erro', err.message);
+      setShowSignatures(false);
+    } finally {
+      setIsLoadingSignatures(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!contract) return;
+    setIsSavingEdit(true);
+    try {
+      const body: any = {};
+      if (editForm.reminder) body.reminder = editForm.reminder;
+      if (editForm.deadline_at) body.deadline_at = new Date(editForm.deadline_at).toISOString();
+      if (editForm.message) body.message = editForm.message;
+
+      const res = await authFetch(`/api/contracts/${contract.id}/update-autentique`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        showAlert('Sucesso', 'Documento atualizado no Autentique!');
+        setShowEditPanel(false);
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao atualizar');
+      }
+    } catch (err: any) {
+      showAlert('Erro', err.message);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDownloadDraft = () => {
+    if (contract && bride) {
+      const cleanText = contract.generated_text
+        .replace(/<center>/gi, '')
+        .replace(/<\/center>/gi, '\n')
+        .replace(/\*\*/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/<br\s*\/?>/gi, '\n');
+      generateContractPDF(bride.name, cleanText);
+    }
+  };
+
+  const handleResendAutentique = async () => {
+    if (!contract) return;
+    setIsLoading(true);
+    try {
+      const res = await authFetch(`/api/contracts/${contract.id}/send-autentique`, { method: 'POST' });
+      const result = await res.json();
+      if (res.ok) {
+        showAlert('Sucesso', 'Contrato reenviado com sucesso!');
+        fetchContract(bride!);
+      } else {
+        throw new Error(result.error || 'Erro ao reenviar');
+      }
+    } catch (err: any) {
+      showAlert('Erro', err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendIndividual = async (ids: string | string[]) => {
+    if (!contract) return;
+    try {
+      const public_ids = Array.isArray(ids) ? ids : [ids];
+      const res = await authFetch(`/api/contracts/${contract.id}/resend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_ids })
+      });
+
+      if (res.ok) {
+        showAlert('Sucesso', 'Solicitação de assinatura reenviada via Autentique!');
+      } else {
+        let errorMsg = 'Erro ao reenviar';
+        try {
+          const errData = await res.json();
+          errorMsg = errData.error || errorMsg;
+        } catch (e) {
+          // Se não conseguir ler o JSON, usa o status text
+          errorMsg = `Erro ${res.status}: ${res.statusText || 'Servidor não respondeu'}`;
+        }
+        throw new Error(errorMsg);
+      }
+    } catch (err: any) {
+      const msg = err.message === 'too_many_resent_emails' 
+        ? 'Este cliente recebeu um reenvio recentemente. Tente novamente mais tarde.' 
+        : err.message;
+      showAlert('Aviso', msg);
+    }
+  };
+
+  const getSignerStatusBadge = (signer: any) => {
+    if (signer.signed?.created_at) return { label: 'Assinado', color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' };
+    if (signer.rejected?.created_at) return { label: 'Recusado', color: 'bg-red-100 text-red-700', dot: 'bg-red-500' };
+    if (signer.viewed?.created_at) return { label: 'Visualizou', color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-400' };
+    return { label: 'Pendente', color: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300' };
+  };
+
+  if (!isOpen || !bride) return null;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+          
+          {showGenerationFlow ? (
+            <ContractModal 
+              isOpen={true} 
+              onClose={() => { setShowGenerationFlow(false); fetchContract(bride); }} 
+              bride={bride} 
+              authFetch={authFetch} 
+              showAlert={showAlert} 
+            />
+          ) : (
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+              {/* Header */}
+              <div className="p-8 pb-6 bg-[#883545] text-white">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-white/60" />
+                      <h3 className="text-xl font-black uppercase tracking-widest">Gestão de Contrato</h3>
+                    </div>
+                    <p className="text-[10px] font-bold text-white/60 uppercase tracking-[0.2em]">{bride.name}</p>
+                  </div>
+                  <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-8 space-y-6 bg-[#FDF8F8]/50 overflow-auto max-h-[70vh]">
+                {isLoading ? (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                    <RefreshCw className="w-8 h-8 text-[#883545] animate-spin" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Consultando...</p>
+                  </div>
+                ) : !contract ? (
+                  <div className="py-12 text-center space-y-6">
+                    <div className="size-20 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mx-auto">
+                      <FileText className="w-10 h-10" />
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="text-lg font-black text-slate-800 uppercase tracking-tight">Nenhum Contrato Ativo</h4>
+                      <p className="text-sm text-slate-500 max-w-xs mx-auto">Este cliente ainda não possui um contrato gerado.</p>
+                    </div>
+                    <button onClick={() => setShowGenerationFlow(true)} className="px-8 py-4 bg-[#883545] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-[#883545]/20 hover:scale-[1.05] transition-all flex items-center gap-3 mx-auto">
+                      <Plus className="w-4 h-4" /> Gerar Novo Contrato
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Status Card */}
+                    <div className="bg-white p-6 rounded-3xl border border-[#883545]/10 shadow-sm flex items-center justify-between">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Atual</p>
+                        <div className="flex items-center gap-2">
+                          <div className={`size-2 rounded-full animate-pulse ${contract.status === 'signed' || contract.status === 'completed' || contract.status === 'concluido' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          <span className="text-lg font-black text-slate-800 uppercase tracking-tighter">
+                            {contract.status === 'draft' ? 'Rascunho' :
+                             contract.status === 'sent' ? 'Pendente Assinaturas' :
+                             contract.status === 'signed' || contract.status === 'completed' || contract.status === 'concluido' ? 'Assinado ✓' :
+                             contract.status === 'visualizado' ? 'Visualizado' :
+                             contract.status === 'rejeitado' ? 'Recusado' : contract.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Data</p>
+                        <p className="text-xs font-bold text-slate-600">{formatDisplayDate(contract.created_at)}</p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <button onClick={handleDownloadDraft} className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col items-center gap-3 hover:border-[#883545]/30 transition-all group">
+                        <Download className="w-6 h-6 text-slate-400 group-hover:text-[#883545]" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Baixar Minuta</span>
+                      </button>
+
+                      {contract.autentique_document_id ? (
+                        <button onClick={handleViewSignatures} className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl flex flex-col items-center gap-3 hover:bg-emerald-100 transition-all text-emerald-600">
+                          <Eye className="w-6 h-6" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Ver Assinaturas</span>
+                        </button>
+                      ) : (
+                        <button onClick={handleResendAutentique} className="p-6 bg-[#883545] text-white rounded-3xl flex flex-col items-center gap-3 hover:scale-[1.02] transition-all">
+                          <Send className="w-6 h-6" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Enviar p/ Assinatura</span>
+                        </button>
+                      )}
+
+                      {contract.signed_pdf_url && (
+                        <button onClick={() => window.open(contract.signed_pdf_url, '_blank')} className="col-span-2 p-5 bg-[#883545] text-white rounded-3xl flex items-center justify-center gap-4 hover:scale-[1.02] transition-all shadow-xl shadow-[#883545]/20">
+                          <Award className="w-6 h-6" />
+                          <span className="text-xs font-black uppercase tracking-widest">Baixar PDF Assinado</span>
+                        </button>
+                      )}
+
+                      {contract.autentique_document_id && (
+                        <button onClick={() => { setShowEditPanel(!showEditPanel); setShowSignatures(false); }} className="col-span-2 p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-100 transition-all text-slate-500">
+                          <RefreshCw className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Editar Configurações do Documento</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Signatures Panel */}
+                    {showSignatures && (
+                      <div className="bg-white rounded-3xl border border-emerald-100 p-6 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status das Assinaturas</p>
+                            {!isLoadingSignatures && signaturesData?.signatures?.some((s: any) => s.action?.name === 'SIGN' && !s.signed?.created_at) && (
+                              <button 
+                                onClick={() => handleResendIndividual(signaturesData.signatures.filter((s: any) => s.action?.name === 'SIGN' && !s.signed?.created_at).map((s: any) => s.public_id))} 
+                                className="text-[9px] font-black text-[#883545] hover:underline uppercase tracking-widest"
+                              >
+                                Cobrar Pendentes
+                              </button>
+                            )}
+                          </div>
+                          {isLoadingSignatures ? (
+                          <div className="flex items-center gap-3 py-4">
+                            <RefreshCw className="w-5 h-5 text-emerald-500 animate-spin" />
+                            <span className="text-sm text-slate-500">Consultando Autentique...</span>
+                          </div>
+                        ) : signaturesData?.signatures?.length > 0 ? (
+                          <div className="space-y-3">
+                            {signaturesData.signatures
+                              .filter((s: any) => s.action?.name === 'SIGN')
+                              .map((signer: any, i: number) => {
+                                const badge = getSignerStatusBadge(signer);
+                              return (
+                                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`size-2 rounded-full ${badge.dot}`} />
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-700">{signer.name}</p>
+                                      <p className="text-[10px] text-slate-400">{signer.email || signer.phone || '—'}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${badge.color}`}>{badge.label}</span>
+                                    {!signer.signed?.created_at && (
+                                      <button onClick={() => handleResendIndividual(signer.public_id)} className="text-[9px] font-black text-blue-500 hover:underline uppercase">Reenviar</button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-400 text-center py-4">Nenhum signatário encontrado.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Edit Panel */}
+                    {showEditPanel && (
+                      <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Editar Documento no Autentique</p>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Lembrete</label>
+                            <select value={editForm.reminder} onChange={e => setEditForm(f => ({...f, reminder: e.target.value}))} className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 bg-slate-50">
+                              <option value="WEEKLY">Semanal</option>
+                              <option value="DAILY">Diário</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Prazo Limite de Assinatura</label>
+                            <input type="date" value={editForm.deadline_at} onChange={e => setEditForm(f => ({...f, deadline_at: e.target.value}))} className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-700 bg-slate-50" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Mensagem para Signatários</label>
+                            <textarea value={editForm.message} onChange={e => setEditForm(f => ({...f, message: e.target.value}))} rows={3} placeholder="Mensagem personalizada..." className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-700 bg-slate-50 resize-none" />
+                          </div>
+                        </div>
+                        <button onClick={handleSaveEdit} disabled={isSavingEdit} className="w-full py-3 bg-[#883545] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                          {isSavingEdit ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                          Salvar Alterações
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Generate New */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <button onClick={() => setShowGenerationFlow(true)} className="w-full py-4 text-[10px] font-black text-slate-300 hover:text-[#883545] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2">
+                        <RotateCcw className="w-3 h-3" /> Gerar Novo Contrato
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-8 bg-white border-t border-slate-50">
+                <button onClick={onClose} className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all">
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -523,59 +1001,15 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [localFilter, setLocalFilter] = useState('Todos');
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
-  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [isContractDetailsModalOpen, setIsContractDetailsModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [brideForModal, setBrideForModal] = useState<Bride | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [isDownloading, setIsDownloading] = useState<number | null>(null);
-
-  const handleDownloadLatestContract = async (bride: Bride) => {
-    setIsDownloading(bride.id);
-    try {
-      const res = await authFetch('/api/contracts');
-      if (res.ok) {
-        const contracts = await res.json();
-        const latest = contracts.find((c: any) => c.bride_id === bride.id);
-        if (latest) {
-          // Busca assinaturas se o contrato estiver assinado
-          let signatures: any[] = [];
-          if (latest.status === 'signed' || latest.status === 'completed') {
-            const sigRes = await authFetch(`/api/contracts/${latest.id}/signatures`);
-            if (sigRes.ok) signatures = await sigRes.json();
-          }
-          
-          let fullContractText = '';
-          if (latest.signature_token) {
-              const fullRes = await fetch(`/api/public/contract/${latest.signature_token}`);
-              if (fullRes.ok) {
-                  const fullData = await fullRes.json();
-                  fullContractText = fullData.generated_text;
-              }
-          }
-
-          if (!fullContractText) {
-             showAlert('Erro', 'Texto do contrato não encontrado no servidor para download.');
-             setIsDownloading(null);
-             return;
-          }
-
-          generateContractPDF(bride.name, fullContractText, signatures, latest.signature_token, settings);
-        } else {
-          showAlert('Contrato não encontrado', 'Ainda não foi gerado um contrato para este cliente.');
-        }
-      }
-    } catch (e) {
-      console.error(e);
-      showAlert('Erro', 'Ocorreu um erro ao buscar o contrato.');
-    } finally {
-      setIsDownloading(null);
-    }
-  };
 
   useEffect(() => {
     const handleOpenContract = (e: any) => {
       setBrideForModal(e.detail);
-      setIsContractModalOpen(true);
+      setIsContractDetailsModalOpen(true);
     };
     window.addEventListener('open-contract', handleOpenContract);
     return () => window.removeEventListener('open-contract', handleOpenContract);
@@ -915,18 +1349,11 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                         <button onClick={() => onUpdateStatus(bride.id, 'Inativa')} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                           <UserMinus className="w-3.5 h-3.5" /> Inativar
                         </button>
-                        <button onClick={() => { setBrideForModal(bride); setIsContractModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
-                          <FileText className="w-3.5 h-3.5" /> Gerar Contrato
+                        <button onClick={() => { setBrideForModal(bride); setIsContractDetailsModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors">
+                          <FileText className="w-3.5 h-3.5" /> Contrato
                         </button>
                         <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                           <XCircle className="w-3.5 h-3.5" /> Cancelar
-                        </button>
-                        <button 
-                          onClick={() => { handleDownloadLatestContract(bride); setOpenMenuId(null); }} 
-                          disabled={isDownloading === bride.id}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors"
-                        >
-                          <Download className="w-3.5 h-3.5" /> {isDownloading === bride.id ? 'Buscando...' : 'Baixar Contrato (PDF)'}
                         </button>
                         <div className="h-px bg-slate-50 my-1" />
                         <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
@@ -1097,18 +1524,11 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                             <button onClick={() => { onUpdateStatus(bride.id, 'Inativa'); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                               <UserMinus className="w-3.5 h-3.5" /> Inativar
                             </button>
-                            <button onClick={() => { setBrideForModal(bride); setIsContractModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-[#883545]/5 hover:text-[#883545] rounded-lg transition-colors">
-                              <FileText className="w-3.5 h-3.5" /> Gerar Contrato
+                            <button onClick={() => { setBrideForModal(bride); setIsContractDetailsModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors">
+                              <FileText className="w-3.5 h-3.5" /> Contrato
                             </button>
                             <button onClick={() => { setBrideForModal(bride); setIsDistratoModalOpen(true); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
                               <XCircle className="w-3.5 h-3.5" /> Cancelar
-                            </button>
-                            <button 
-                              onClick={() => { handleDownloadLatestContract(bride); setOpenMenuId(null); }} 
-                              disabled={isDownloading === bride.id}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-[#883545] hover:bg-[#883545]/5 rounded-lg transition-colors"
-                            >
-                              <Download className="w-3.5 h-3.5" /> {isDownloading === bride.id ? 'Baixando...' : 'Baixar Contrato (PDF)'}
                             </button>
                             <div className="h-px bg-slate-50 my-1" />
                             <button onClick={() => { onDelete(bride.id); setOpenMenuId(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
@@ -1144,12 +1564,13 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
           }
         }}
       />
-      <ContractModal
-        isOpen={isContractModalOpen}
-        onClose={() => setIsContractModalOpen(false)}
+      <ContractDetailsModal
+        isOpen={isContractDetailsModalOpen}
+        onClose={() => setIsContractDetailsModalOpen(false)}
         bride={brideForModal}
         authFetch={authFetch}
         showAlert={showAlert}
+        settings={settings}
       />
       <ClientSummaryModal
         isOpen={isSummaryModalOpen}

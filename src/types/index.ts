@@ -44,7 +44,7 @@ export interface Contract {
   template_id: number;
   status: string;
   generated_text: string;
-  zapsign_doc_id?: string;
+  autentique_document_id?: string;
   sign_url_admin?: string;
   sign_url_client?: string;
   signed_pdf_url?: string;
@@ -149,8 +149,8 @@ export interface AppSettings {
     darkMode: boolean;
     compactMode: boolean;
   };
-  extraHourRate: number;
-  zapsignToken: string;
+  extra_hourRate: number;
+  autentiqueToken: string;
   isSandbox: boolean;
 }
 
@@ -173,7 +173,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     darkMode: false,
     compactMode: false
   },
-  extraHourRate: 350,
-  zapsignToken: '',
+  extra_hourRate: 350,
+  autentiqueToken: '',
   isSandbox: true
 };

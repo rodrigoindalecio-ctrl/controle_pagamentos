@@ -1,13 +1,8 @@
 {
-    "version": 2,
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "/api/index.ts"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/index.html"
-        }
-    ]
+  "crons": [
+    {
+      "path": "/api/admin/backup/email",
+      "schedule": "0 8 * * 1"
+    }
+  ]
 }

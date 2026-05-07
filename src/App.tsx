@@ -18,8 +18,8 @@ import { SettingsView, BrideModal, ConfirmModal } from './components/views/Setti
 import { FinanceView } from './components/views/FinanceView';
 import { LoginView } from './components/views/LoginView';
 import { BridesView, DistratoModal, ContractModal, ClientSummaryModal } from './components/views/BridesView';
-import { SigningView, SignaturePad } from './components/views/SigningView';
 import { DashboardView } from './components/views/DashboardView';
+import { ContractTemplatesView } from './components/views/ContractTemplatesView';
 import DoughnutChart from './DoughnutChart';
 import VolumeValorBarChart from './VolumeValorBarChart';
 import OcupacaoAgendaBarChart from './OcupacaoAgendaBarChart';
@@ -70,15 +70,21 @@ import {
   Check,
   RefreshCw
 } from 'lucide-react';
+import { 
+  Bride, 
+  Contract, 
+  ContractTemplate, 
+  Payment, 
+  Expense, 
+  DashboardStats, 
+  AppSettings, 
+  DEFAULT_SETTINGS as BASE_DEFAULT_SETTINGS 
+} from './types';
 
 // --- PDF Helper ---
 export async function generateContractPDF(brideName: string, text: string, signatures: any[] = [], token?: string, settings?: any) {
   try {
-    console.log("Iniciando geração de PDF...");
-    if (!text) {
-      alert("Erro: Texto do contrato não encontrado.");
-      return;
-    }
+    if (!text) return;
 
     const doc = new jsPDF({
       orientation: 'p',
@@ -86,77 +92,52 @@ export async function generateContractPDF(brideName: string, text: string, signa
       format: 'a4',
     });
 
-    const companyName = settings?.profile?.name || "Vanessa Bidinotti - Assessoria e Cerimonial";
-    const docId = token || "DOC-" + Math.random().toString(36).substring(2, 9).toUpperCase();
-
-    // Função para desenhar o rodapé de segurança em cada página
-    const addFooter = (doc: jsPDF, pageNumber: number, totalPages: number) => {
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
-      doc.setFontSize(6);
-      doc.setTextColor(160, 160, 160);
-      const footerText = `${companyName} | ID: ${docId}\nDocumento assinado eletronicamente conforme MP 2.200-2/2001 e Lei 14.063/2020.`;
-      doc.text(footerText, 15, pageHeight - 12, { maxWidth: pageWidth - 60 });
-      doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - 40, pageHeight - 10);
-      
-      // Linha divisória fina
-      doc.setDrawColor(240, 240, 240);
-      doc.line(15, pageHeight - 15, pageWidth - 15, pageHeight - 15);
-    };
-
-    // --- RENDERIZAÇÃO MANUAL DO CONTRATO (SISTEMA DE PRECISÃO) ---
-    doc.setFont("times", "normal");
-    doc.setFontSize(11);
     const margin = 20;
     const pageHeight = doc.internal.pageSize.height;
     const pageWidth = doc.internal.pageSize.width;
     const maxWidth = pageWidth - (margin * 2);
-    let currentY = 12; // Margem inicial super compacta
-    let isFirstContent = true;
-
-    const checkPageBreak = (needed: number) => {
-      if (currentY + needed > 282) {
-        doc.addPage();
-        currentY = 12;
-        return true;
-      }
-      return false;
-    };
+    let currentY = 25;
 
     // Divide o texto em parágrafos
     const paragraphs = text.split('\n');
     let inCenterBlock = false;
-    let sigLineCounter = 0;
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(40, 40, 40);
 
     for (let pText of paragraphs) {
-      if (pText.includes('<center>')) inCenterBlock = true;
+      const trimmed = pText.trim();
       
-      let cleanText = pText.replace(/<center>/g, '').replace(/<\/center>/g, '').replace(/\*\*/g, '').trim();
+      if (trimmed.includes('<center>')) inCenterBlock = true;
       
-      if (cleanText === "" && isFirstContent) continue;
-      isFirstContent = false;
-
-      // Ignora linhas totalmente vazias extras
-      if (cleanText === "" && pText.trim() === "") {
-          currentY += 1.5;
+      const cleanText = trimmed
+        .replace(/<center>/gi, '')
+        .replace(/<\/center>/gi, '')
+        .replace(/\*\*/g, '');
+      
+      if (cleanText === "" && trimmed === "") {
+          currentY += 4;
           continue;
       }
 
-      const isExplicitCenter = pText.includes('<center>') || pText.includes('</center>');
+      const isExplicitCenter = trimmed.toLowerCase().includes('<center>') || trimmed.toLowerCase().includes('</center>');
       const isCenter = inCenterBlock || isExplicitCenter;
-      const isBold = (pText.startsWith('**') && pText.endsWith('**')) || isCenter || isExplicitCenter;
-
-      const isSignatureLine = cleanText.startsWith('____') || cleanText.includes('________________');
-      if (isSignatureLine) {
-          checkPageBreak(25); // Garante que a assinatura não quebre de página no meio
-          currentY += 8; // Espaço reduzido antes da assinatura
-          sigLineCounter = 4;
-      }
+      const isBold = trimmed.includes('**') || 
+                     cleanText.toUpperCase().startsWith('CLÁUSULA') || 
+                     cleanText.toUpperCase().startsWith('PARÁGRAFO') ||
+                     cleanText.toUpperCase().startsWith('CONTRATO');
 
       doc.setFont("times", isBold ? "bold" : "normal");
+      doc.setFontSize(isBold ? 11 : 10.5);
+      
       const splitLines = doc.splitTextToSize(cleanText, maxWidth);
       
-      checkPageBreak(splitLines.length * 4.8);
+      // Check page break
+      if (currentY + (splitLines.length * 5.5) > pageHeight - 20) {
+        doc.addPage();
+        currentY = 25;
+      }
 
       splitLines.forEach((line: string) => {
           if (isCenter) {
@@ -164,339 +145,24 @@ export async function generateContractPDF(brideName: string, text: string, signa
           } else {
               doc.text(line, margin, currentY, { maxWidth: maxWidth, align: 'justify' });
           }
-
-          if (sigLineCounter > 0 && !isSignatureLine) {
-              const availableSignatures = [
-                  ...(signatures || []),
-                  { signer_name: "Vanessa Bidinotti", signature_image: vanessaSignature },
-                  { signer_name: "Vanessa Bidinotti Vicente", signature_image: vanessaSignature }
-              ];
-
-              for (const sig of availableSignatures) {
-                  const sName = (sig.signer_name || "").toLowerCase();
-                  const lText = line.toLowerCase();
-                  if (sName.length > 3 && lText.includes(sName)) {
-                      if (sig.signature_image) {
-                          try {
-                            // Sobe a assinatura para ficar EXATAMENTE em cima da linha anterior (evita cobrir o nome)
-                            doc.addImage(sig.signature_image, 'PNG', (pageWidth / 2) - 25, currentY - 17, 50, 16);
-                            sigLineCounter = 0;
-                          } catch (imgErr) {
-                            console.error("Erro ao adicionar imagem:", imgErr);
-                          }
-                      }
-                  }
-              }
-          }
-
-          currentY += 4.8; // Altura de linha reduzida (interlinhado mais elegante e compacto)
-          if (sigLineCounter > 0) sigLineCounter--;
+          currentY += 5.5;
       });
 
-      if (isSignatureLine) currentY += 1.5;
-      else currentY += 0.8;
-
-      if (pText.includes('</center>')) inCenterBlock = false;
+      if (trimmed.includes('</center>')) inCenterBlock = false;
     }
 
-    // --- APLICAR RODAPÉS ---
-    const totalPages = doc.getNumberOfPages();
-    for(let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        addFooter(doc, i, totalPages);
-    }
-
-    // --- PÁGINA DE AUDITORIA ---
-    doc.addPage();
-    const auditY = 30;
-    doc.setFont("times", "bold");
-    doc.setFontSize(16);
-    doc.text("RELATÓRIO DE ASSINATURAS", pageWidth / 2, auditY, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setFont("times", "normal");
-    doc.text(`Documento ID: ${docId}`, pageWidth / 2, auditY + 10, { align: 'center' });
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, auditY + 15, { align: 'center' });
-
-    let currentAuditY = auditY + 35;
-    
-    const auditSignatures = [
-        ...(signatures || []),
-        { 
-            signer_name: "Vanessa Bidinotti Vicente", 
-            signer_type: "CONTRATADA (CERTIFICADA)", 
-            signed_at: new Date().toISOString(),
-            ip_address: "177.100.200.12 (Acesso Administrativo Seguro)",
-            user_agent: navigator.userAgent,
-            signer_email: "contato@vanessabidinotti.com.br",
-            signer_phone: "+55 11 99999-9999",
-            signer_location: "-23.5505, -46.6333 (Administração Central)",
-            signature_image: vanessaSignature
-        }
-    ];
-
-    for(const sig of auditSignatures) {
-        if (currentAuditY > 240) {
-            doc.addPage();
-            currentAuditY = 30;
-        }
-
-        doc.setDrawColor(230, 230, 230);
-        doc.setFillColor(252, 252, 252);
-        doc.rect(margin, currentAuditY, maxWidth, 50, 'FD');
-        
-        doc.setFont("times", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(136, 53, 69);
-        doc.text(sig.signer_name.toUpperCase(), margin + 5, currentAuditY + 10);
-        
-        doc.setFont("times", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(80, 80, 80);
-        doc.text(`Papel: ${sig.signer_type || 'CONTRATANTE'}`, margin + 5, currentAuditY + 18);
-        doc.text(`Data/Hora: ${new Date(sig.signed_at).toLocaleString('pt-BR')}`, margin + 5, currentAuditY + 23);
-        
-        // Seção: Pontos de Autenticação
-        doc.setFont("times", "bold");
-        doc.text("PONTOS DE AUTENTICAÇÃO:", margin + 5, currentAuditY + 30);
-        doc.setFont("times", "normal");
-        doc.text(`Telefone: ${sig.signer_phone || "Proprietário do Sistema"}`, margin + 5, currentAuditY + 34);
-        doc.text(`E-mail: ${sig.signer_email || "Autenticado via Painel Administrativo"}`, margin + 5, currentAuditY + 38);
-        doc.text(`Localização: ${sig.signer_location || "Aproximada (via IP)"}`, margin + 5, currentAuditY + 42);
-
-        doc.text(`IP: ${sig.ip_address}`, margin + 90, currentAuditY + 34);
-        doc.text(`Dispositivo: ${(sig.user_agent || '').substring(0, 60)}...`, margin + 90, currentAuditY + 38, { maxWidth: maxWidth - 90 });
-        
-        // Desenha a imagem da assinatura no log para conferência visual
-        if (sig.signature_image) {
-            try {
-                // Desenha a assinatura à direita das informações
-                doc.addImage(sig.signature_image, 'PNG', margin + maxWidth - 55, currentAuditY + 15, 50, 20);
-            } catch (e) {
-                console.error("Erro no log de assinatura:", e);
-            }
-        }
-
-        doc.setFontSize(9);
-        doc.setTextColor(34, 197, 94);
-        // Align to the right edge of the bounding box
-        doc.text("✓ INTEGRIDADE GARANTIDA", margin + maxWidth - 5, currentAuditY + 10, { align: 'right' });
-        doc.setTextColor(0, 0, 0);
-
-        currentAuditY += 60;
-    }
-
-    // Texto final de conformidade legal
-    if (currentAuditY > 260) { doc.addPage(); currentAuditY = 20; }
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    const complianceText = "Certificamos a integridade deste documento e a autenticidade das assinaturas colhidas via endereço de IP e ID de dispositivo, em conformidade com o disposto na Medida Provisória nº 2.200-2/2001 e na Lei nº 14.063/2020. O registro cronológico e os metadados de acesso garantem a não-repúdio e a autoria das partes envolvidas.";
-    doc.text(complianceText, margin, currentAuditY + 10, { maxWidth: maxWidth, align: 'justify' });
-
-    const fileName = `Contrato_${brideName.replace(/\s+/g, '_')}_Assinado.pdf`;
-    doc.save(fileName);
-    console.log("PDF gerado com sucesso!");
-    
-  } catch (error: any) {
-    console.error("Erro crítico na geração do PDF:", error);
-    alert("Erro ao gerar o PDF: " + error.message);
+    doc.save(`Contrato_${brideName.replace(/\s+/g, '_')}.pdf`);
+  } catch (err) {
+    console.error("Erro ao gerar PDF:", err);
   }
 }
 
 
 
 
-// --- Types & Interfaces ---
 
-interface Bride {
-  id: number;
-  name: string;
-  email: string;
-  event_date: string;
-  created_at: string;
-  status: 'Ativa' | 'Inativa' | 'Cancelado' | 'Concluído';
-  service_type: string;
-  contract_value: number;
-  original_value: number;
-  balance: number;
-  event_location: string;
-  cpf?: string;
-  rg?: string;
-  birth_date?: string;
-  address?: string;
-  phone_number?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  spouse_name?: string;
-  event_start_time?: string;
-  event_end_time?: string;
-  marital_status?: string;
-  profession?: string;
-  nationality?: string;
-  couple_type?: 'tradicional' | 'noivas' | 'noivos';
-  spouse_cpf?: string;
-  spouse_rg?: string;
-  event_address?: string;
-  has_different_locations?: boolean;
-  reception_location?: string;
-  reception_address?: string;
-  guest_count?: string | number;
-  address_number?: string;
-  address_complement?: string;
-  extra_hour_value?: number;
-}
 
-interface Contract {
-  id: number;
-  bride_id: number;
-  template_id: number;
-  status: string;
-  generated_text: string;
-  zapsign_doc_id?: string;
-  sign_url_admin?: string;
-  sign_url_client?: string;
-  signed_pdf_url?: string;
-  created_at: string;
-}
-
-interface ContractTemplate {
-  id: number;
-  name: string;
-  template_text: string;
-}
-
-interface Payment {
-  id: number;
-  bride_id: number;
-  bride_name: string;
-  description: string;
-  amount_paid: number;
-  payment_date: string;
-  status: string;
-  revenue_type?: 'assessoria' | 'bv';
-}
-
-interface Expense {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  category: string;
-}
-
-interface MonthlyStat {
-  month: string;
-  revenue: number;
-  expenses: number;
-}
-
-interface DashboardStats {
-  activeBrides: number;
-  yearlyRevenue: number;
-  activeBridesBreakdown?: {
-    year2026?: number;
-    year2027?: number;
-    year2028?: number;
-    year1?: number;
-    year2?: number;
-    year3?: number;
-    label1?: string;
-    label2?: string;
-    label3?: string;
-  };
-  eventosAtivos?: number;
-  receita?: number;
-  pendentes?: number;
-  despesas?: number;
-  novosContratos?: number;
-  ticketMedio?: number;
-  eficiencia?: string;
-  crescimentoYoY?: string;
-  cancelamentos?: any;
-  faturamentoProjetado?: number;
-  ocupacaoAgenda?: any;
-  mixReceita?: any;
-  volumeValor?: any;
-  ghostLines?: any;
-  fluxoCaixa?: any;
-  recebimentos?: any;
-  chartData?: Array<{ month: string; revenue: number; expenses: number }>;
-  monthlyRevenue?: number;
-  revenueTrend?: string;
-  pendingPayments?: number;
-  pendingBreakdown?: {
-    year2026: number;
-    year2027: number;
-    year2028: number;
-  };
-  monthlyExpenses?: number;
-  expensesTrend?: string;
-  efficiency?: string;
-  growthYoY?: string;
-  growthYoYBreakdown?: {
-    current: number;
-    previous: number;
-  };
-  cancellations?: {
-    count: number;
-    revenue: number;
-    lost: number;
-  };
-}
-
-interface AppSettings {
-  profile: {
-    name: string;
-    logo: string;
-    description: string;
-  };
-  services: string[];
-  partners: string[];
-  locations: { name: string; address: string }[];
-  goals: {
-    annualRevenue: number;
-    fineThresholdDays: number;
-    fineEarlyPercent: number;
-    fineLatePercent: number;
-  };
-  ui: {
-    darkMode: boolean;
-    compactMode: boolean;
-  };
-  extraHourRate: number;
-  zapsignToken: string;
-  isSandbox: boolean;
-}
-
-const DEFAULT_SETTINGS: AppSettings = {
-  profile: {
-    name: "WeddingAdviser",
-    logo: "",
-    description: "Gestão Premium"
-  },
-  services: ["Assessoria do dia", "Assessoria Completa", "Assessoria Parcial", "Consultoria"],
-  partners: ["Papelaria Modelo", "Buffet X", "Uber", "Freelancer"],
-  locations: [
-    { name: "Espaço Villa Lobos", address: "" },
-    { name: "Buffet Torres", address: "" },
-    { name: "Fazenda Vila Rica", address: "" }
-  ],
-  goals: {
-    annualRevenue: 100000,
-    fineThresholdDays: 30,
-    fineEarlyPercent: 50,
-    fineLatePercent: 100
-  },
-  ui: {
-    darkMode: false,
-    compactMode: false
-  },
-  extraHourRate: 300,
-  zapsignToken: '',
-  isSandbox: true
-};
+const DEFAULT_SETTINGS: AppSettings = BASE_DEFAULT_SETTINGS;
 
 // Implementação mínima de StatCard
 export const StatCard = ({ label, value, icon: Icon, color, trend, children }: any) => {
@@ -663,8 +329,6 @@ const LoadingScreen = ({ logo }: { logo?: string, key?: string }) => (
 // --- Componente de Login ---
 export default function App() {
   const mainContentRef = React.useRef<HTMLDivElement>(null);
-  const urlParams = new URLSearchParams(window.location.search);
-  const publicToken = urlParams.get('token');
 
   // Autenticação: token fica em localStorage para persistir entre sessões (mesmo fechando o browser)
   const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('wedding_token'));
@@ -680,7 +344,7 @@ export default function App() {
     };
   });
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'brides' | 'finance' | 'settings' | 'templates'>('dashboard');
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [settingsSubTab, setSettingsSubTab] = useState<'profile' | 'services' | 'goals' | 'system'>('profile');
   const [stats, setStats] = useState<DashboardStats | null>(() => {
@@ -701,9 +365,6 @@ export default function App() {
   });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isPublicBrandingLoaded, setIsPublicBrandingLoaded] = useState(false);
-  const [isSigningView, setIsSigningView] = useState(false);
-  const [contractToSign, setContractToSign] = useState<any>(null);
-  const [signatureToken, setSignatureToken] = useState<string | null>(publicToken);
   const [isBrideModalOpen, setIsBrideModalOpen] = useState(false);
   const [brideToEdit, setBrideToEdit] = useState<Bride | null>(null);
   const [isContractFlow, setIsContractFlow] = useState(false);
@@ -757,38 +418,66 @@ export default function App() {
     }
   });
 
+  // Lock para evitar múltiplos refresh simultâneos
+  const refreshPromiseRef = React.useRef<Promise<string | null> | null>(null);
+
   // Helper para fazer fetch autenticado
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> || {})
     };
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    // Lê sempre do localStorage para evitar problemas de closure stale no React state
+    let currentToken = authToken || localStorage.getItem('wedding_token');
+    if (currentToken) headers['Authorization'] = `Bearer ${currentToken}`;
 
     try {
-      const res = await fetch(url, { ...options, headers });
+      const authHeader = headers['Authorization'] || '';
+      if (authHeader.length > 1000) {
+        console.warn(`[Auth] Header Authorization grande detectado: ${authHeader.length} bytes.`);
+      }
+
+      let res = await fetch(url, { ...options, headers });
 
       // Se token expirou, tenta renovar com refresh token
       if (res.status === 401) {
         const refreshToken = localStorage.getItem('wedding_refresh_token');
         if (refreshToken) {
-          console.log('[Auth] Token expirado, tentando refresh...');
-          const refreshRes = await fetch('/api/auth/refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken })
-          });
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            localStorage.setItem('wedding_token', refreshData.access_token);
-            localStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
-            setAuthToken(refreshData.access_token);
-            // Retry a requisição original com novo token
-            headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+          // Se já houver um refresh em andamento, aguarda ele
+          if (!refreshPromiseRef.current) {
+            console.log('[Auth] Token expirado, iniciando refresh...');
+            refreshPromiseRef.current = (async () => {
+              try {
+                const refreshRes = await fetch('/api/auth/refresh', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                if (refreshRes.ok) {
+                  const refreshData = await refreshRes.json();
+                  localStorage.setItem('wedding_token', refreshData.access_token);
+                  localStorage.setItem('wedding_refresh_token', refreshData.refresh_token);
+                  setAuthToken(refreshData.access_token);
+                  return refreshData.access_token;
+                }
+              } catch (refreshErr) {
+                console.warn('[Auth] Falha no refresh de token:', refreshErr);
+              } finally {
+                refreshPromiseRef.current = null;
+              }
+              return null;
+            })();
+          }
+
+          const newToken = await refreshPromiseRef.current;
+          if (newToken) {
+            headers['Authorization'] = `Bearer ${newToken}`;
             return fetch(url, { ...options, headers });
           }
         }
-        // Não conseguiu renovar: faz logout
+        
+        // Sem refresh token ou falha no refresh: faz logout limpo sem travar
+        console.warn(`[Auth] 401 em ${url} sem refresh token. Fazendo logout.`);
         handleLogout();
         return res;
       }
@@ -808,7 +497,10 @@ export default function App() {
     // Busca informações públicas de branding (para guia anônima/primeiro acesso)
     if (!isAuthenticated && !isPublicBrandingLoaded) {
       fetch('/api/public/settings')
-        .then(res => res.json())
+        .then(async (res) => {
+          if (!res.ok) throw new Error('Falha ao buscar settings públicos');
+          return res.json();
+        })
         .then(data => {
           if (data && data.profile) {
             setSettings(prev => ({
@@ -816,6 +508,9 @@ export default function App() {
               profile: { ...prev.profile, ...data.profile }
             }));
           }
+        })
+        .catch(err => {
+          console.warn('[App] Erro ao carregar branding público, usando fallback.', err);
         })
         .finally(() => {
           setIsPublicBrandingLoaded(true);
@@ -826,17 +521,17 @@ export default function App() {
   }, [isAuthenticated, isPublicBrandingLoaded]);
 
   useEffect(() => {
-    // A tela de loading agora é controlada pelo fetchData ou fetchPublicBranding
-    // Se já temos cache, podemos liberar o loading mais rápido para estética
+    // Se NÃO está autenticado: o fetchPublicBranding controla o loading
+    // Se está autenticado: o fetchData controla o loading
+    // Se tem cache E não está autenticado: libera o loading rapidamente (só para a tela de login)
     const hasCache = localStorage.getItem('wedding_stats') !== null;
-    if (hasCache) {
+    if (hasCache && !authToken) {
       const timer = setTimeout(() => {
         setIsInitialLoading(false);
-      }, 1500);
+      }, 800);
       return () => clearTimeout(timer);
     }
-    // Se não tem cache, o loading fica preso até o fetch terminar (feita nos effects acima)
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
     localStorage.setItem('wedding_settings', JSON.stringify(settings));
@@ -880,41 +575,70 @@ export default function App() {
     }
   }, [activeTab]);
 
+  const isFetchingDataRef = React.useRef(false);
+
   const fetchData = async (year?: string, month?: string) => {
+    if (isFetchingDataRef.current) {
+      console.warn('[App] ⏳ fetchData já em execução, ignorando chamada duplicada.');
+      return;
+    }
+    
+    isFetchingDataRef.current = true;
     try {
       const y = year || filterYear;
       const m = month || filterMonth;
 
+      console.log(`[App] 🔄 Buscando dados: ${m}/${y}...`);
+
+      // Segurança: Se algo travar, liberamos o loading em 3 segundos
+      const safetyTimer = setTimeout(() => {
+        setIsInitialLoading(false);
+        console.warn('[App] ⚠️ Loading removido por timeout (3s).');
+      }, 3000);
+
+      // Limpa cache local antes de buscar para garantir que não usemos dados truncados antigos
+      localStorage.removeItem('wedding_payments');
+      localStorage.removeItem('wedding_expenses');
+      localStorage.removeItem('wedding_brides');
+
       // Busca dados essenciais em paralelo
-      const [statsRes, bridesRes, paymentsRes, expensesRes, settingsRes] = await Promise.all([
-        authFetch(`/api/dashboard/stats?year=${y}&month=${m}`),
+      console.log('[App] 📡 Chamando APIs (stats, brides, payments, expenses, settings)...');
+      
+      const results = await Promise.allSettled([
+        authFetch(`/api/dashboard/stats?year=${y}&month=${m}&_t=${Date.now()}`),
         authFetch(`/api/brides?_t=${Date.now()}`),
-        authFetch('/api/payments'),
-        authFetch('/api/expenses'),
+        authFetch(`/api/payments?_t=${Date.now()}`),
+        authFetch(`/api/expenses?_t=${Date.now()}`),
         authFetch('/api/settings')
       ]);
 
-      if (statsRes.ok) {
+      clearTimeout(safetyTimer);
+
+      const [statsRes, bridesRes, paymentsRes, expensesRes, settingsRes] = results.map(r => r.status === 'fulfilled' ? r.value : null) as [Response | null, Response | null, Response | null, Response | null, Response | null];
+
+      if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
         setStats(data);
         localStorage.setItem('wedding_stats', JSON.stringify(data));
+        console.log('[App] ✅ Stats carregados');
       }
-      if (bridesRes.ok) {
+      if (bridesRes && bridesRes.ok) {
         const data = await bridesRes.json();
         setBrides(data);
         localStorage.setItem('wedding_brides', JSON.stringify(data));
+        console.log('[App] ✅ Clientes carregados');
       }
-      if (paymentsRes.ok) {
+      if (paymentsRes && paymentsRes.ok) {
         const data = await paymentsRes.json();
         setPayments(data);
         localStorage.setItem('wedding_payments', JSON.stringify(data));
       }
-      if (expensesRes.ok) {
+      if (expensesRes && expensesRes.ok) {
         const data = await expensesRes.json();
         setExpenses(data);
         localStorage.setItem('wedding_expenses', JSON.stringify(data));
       }
-      if (settingsRes.ok) {
+      if (settingsRes && settingsRes.ok) {
         const dbSettings = await settingsRes.json();
         if (dbSettings && Object.keys(dbSettings).length > 0) {
           const merged = {
@@ -927,45 +651,27 @@ export default function App() {
           };
           setSettings(merged);
           localStorage.setItem('wedding_settings', JSON.stringify(merged));
+          console.log('[App] ✅ Settings carregados');
         }
       }
       setIsDataLoaded(true);
-      setIsInitialLoading(false);
+      setIsInitialLoading(false); // Só libera agora que TUDO foi setado
     } catch (error) {
-      console.error('Error fetching data:', error);
-      // Se houver erro ou timeout, pelo menos paramos o loading para mostrar o cache
+      console.error('[App] ❌ Erro crítico no fetchData:', error);
       setIsInitialLoading(false);
+    } finally {
+      isFetchingDataRef.current = false;
     }
   };
 
   useEffect(() => {
+    // Só busca dados se o usuário estiver autenticado
+    if (!authToken) return;
     fetchData();
-  }, [filterYear, filterMonth]);
+  }, [filterYear, filterMonth, authToken]);
 
-  // Detector de Token Público (Assinatura de Contrato)
-  useEffect(() => {
-    if (signatureToken) {
-      setIsInitialLoading(true);
-      fetch(`/api/public/contract/${signatureToken}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.generated_text) {
-            setContractToSign(data);
-            setIsSigningView(true);
-          } else {
-            console.error('[SigningView] Contrato não encontrado ou sem texto gerado:', data);
-          }
-        })
-        .catch(err => console.error('[SigningView] Erro ao buscar contrato:', err))
-        .finally(() => setIsInitialLoading(false));
-    }
-  }, [signatureToken]);
 
-  useEffect(() => {
-    if (authToken) {
-      fetchData();
-    }
-  }, [authToken]);
+
 
   const handleSaveBride = async (brideData: any) => {
     try {
@@ -1237,9 +943,6 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  if (publicToken) {
-    return <SigningView token={publicToken} settings={settings} contract={contractToSign} />;
-  }
 
   return (
     <div className="flex h-screen bg-[#FDF8F8] text-slate-900 overflow-hidden font-sans">
@@ -1249,7 +952,21 @@ export default function App() {
           <div className="flex items-center gap-3 mb-10 px-2 group cursor-pointer">
             <div className="size-12 bg-white rounded-2xl rotate-3 flex items-center justify-center shadow-lg shadow-[#883545]/10 group-hover:rotate-6 transition-transform overflow-hidden border border-[#883545]/5">
               {settings.profile.logo ? (
-                <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+                <img 
+                  src={settings.profile.logo} 
+                  alt="Logo" 
+                  className="w-full h-full object-contain p-1" 
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    const parent = (e.target as HTMLImageElement).parentElement;
+                    if (parent) {
+                      const fallback = document.createElement('div');
+                      fallback.className = "size-full bg-[#883545] flex items-center justify-center";
+                      fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.54 4.05 3 5.5l7 7Z"/></svg>';
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
               ) : (
                 <div className="size-full bg-[#883545] flex items-center justify-center">
                   <Heart className="text-white w-7 h-7" />
@@ -1269,6 +986,7 @@ export default function App() {
           <nav className="flex-1 space-y-2">
             <SidebarItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleTabChange('dashboard')} />
             <SidebarItem icon={Users} label="Clientes" active={activeTab === 'brides'} onClick={() => handleTabChange('brides')} />
+            <SidebarItem icon={FileText} label="Contratos" active={activeTab === 'templates'} onClick={() => handleTabChange('templates')} />
             <SidebarItem icon={CircleDollarSign} label="Financeiro" active={activeTab === 'finance'} onClick={() => handleTabChange('finance')} />
             <SidebarItem icon={Settings} label="Configurações" active={activeTab === 'settings'} onClick={() => handleTabChange('settings')} />
           </nav>
@@ -1313,17 +1031,6 @@ export default function App() {
         <AnimatePresence mode="wait">
           {isInitialLoading ? (
             <LoadingScreen key="loading" logo={settings.profile.logo} />
-          ) : isSigningView ? (
-            <SigningView
-              key="signing"
-              settings={settings}
-              contract={contractToSign}
-              token={signatureToken}
-              onSigned={() => {
-                // Opcional: recarregar dados se estiver logado
-                if (isAuthenticated) fetchData();
-              }}
-            />
           ) : !isAuthenticated ? (
             <LoginView
               key="login"
@@ -1334,9 +1041,9 @@ export default function App() {
                 setAuthToken(token);
                 setUserProfile({ name: user.name, email: user.email }); // sem senha
                 setActiveTab('dashboard');
+                // Mantém o loading ativo: o fetchData() (disparado pelo efeito [authToken])
+                // vai chamar setIsInitialLoading(false) quando terminar com os dados prontos.
                 setIsInitialLoading(true);
-                // Pequeno delay para exibir a experiência de transição premium
-                setTimeout(() => setIsInitialLoading(false), 2000);
               }}
               logo={settings.profile.logo}
               companyName={settings.profile.name}
@@ -1354,7 +1061,21 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <div className="size-11 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#883545]/5 overflow-hidden border border-[#883545]/10">
                     {settings.profile.logo ? (
-                      <img src={settings.profile.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+                      <img 
+                        src={settings.profile.logo} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain p-1" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          const parent = (e.target as HTMLImageElement).parentElement;
+                          if (parent) {
+                            const fallback = document.createElement('div');
+                            fallback.className = "size-full bg-[#883545] flex items-center justify-center";
+                            fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.54 4.05 3 5.5l7 7Z"/></svg>';
+                            parent.appendChild(fallback);
+                          }
+                        }}
+                      />
                     ) : (
                       <div className="size-full bg-[#883545] flex items-center justify-center">
                         <Heart className="text-white w-6 h-6" />
@@ -1439,7 +1160,11 @@ export default function App() {
                     />
                   )}
                   {/* CRM desativado pra Vercel */}
-                  {activeTab === 'settings' && (
+                  {activeTab === 'templates' && (
+            <ContractTemplatesView authFetch={authFetch} showAlert={showAlert} />
+          )}
+
+          {activeTab === 'settings' && (
                     <SettingsView
                       key={`settings-${settingsSubTab}`}
                       data={{ brides, payments, expenses }}

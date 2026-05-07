@@ -1,81 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppSettings, Bride, Payment, Expense, DEFAULT_SETTINGS } from "../../types";
-import { Save, AlertCircle, User, Award, CheckCircle, Clock, Plus, Trash2, Users, Calendar, Wallet, LayoutDashboard, Sparkles, LogOut, XCircle, Heart, MapPin, ChevronRight, Eye, EyeOff, TrendingUp, ShieldCheck, Settings, Edit, Lock } from "lucide-react";
+import { Save, AlertCircle, User, Award, CheckCircle, Clock, Plus, Trash2, Users, Calendar, Wallet, LayoutDashboard, Sparkles, LogOut, XCircle, Heart, MapPin, ChevronRight, Eye, EyeOff, TrendingUp, ShieldCheck, Settings, Edit, Lock, Download, RefreshCw } from "lucide-react";
 import { Header } from "../../App";
 
-const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system' | 'zapSignAccounts', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system' | 'zapSignAccounts'>(initialTab as any);
-  const [zapAccounts, setZapAccounts] = useState<any[]>([]);
-  const [isZapModalOpen, setIsZapModalOpen] = useState(false);
-  const [editingZap, setEditingZap] = useState<any>(null);
-  const [zapLoading, setZapLoading] = useState(false);
+const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile, authToken, onSaveSettings, onSaveProfile, initialTab = 'profile', showAlert, showConfirm }: { settings: AppSettings, setSettings: (s: AppSettings) => void, data: { brides: Bride[], payments: Payment[], expenses: Expense[] }, userProfile: any, setUserProfile: (u: any) => void, authToken: string | null, key?: string, onSaveSettings: (s: AppSettings) => Promise<boolean>, onSaveProfile: (p: any) => Promise<boolean>, initialTab?: 'profile' | 'services' | 'goals' | 'system', showAlert: (t: string, m: string) => void, showConfirm: (t: string, m: string, cb: () => void) => void }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'services' | 'goals' | 'system'>(initialTab as any);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPass, setNewPass] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
   const [passMessage, setPassMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [isEmailBackupLoading, setIsEmailBackupLoading] = useState(false);
 
-  const fetchZapAccounts = async () => {
-    setZapLoading(true);
-    try {
-      const res = await fetch('/api/zapsign/accounts', {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-      if (res.ok) setZapAccounts(await res.json());
-    } catch (e) { console.error(e); }
-    finally { setZapLoading(false); }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'zapSignAccounts') fetchZapAccounts();
-  }, [activeTab]);
-
-  const handleSaveZapAccount = async (acc: any) => {
-    try {
-      const isEdit = !!acc.id;
-      const url = isEdit ? `/api/zapsign/accounts/${acc.id}` : '/api/zapsign/accounts';
-      const method = isEdit ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-        body: JSON.stringify(acc)
-      });
-      if (res.ok) {
-        fetchZapAccounts();
-        setIsZapModalOpen(false);
-        setEditingZap(null);
-        showAlert('Sucesso', 'Conta ZapSign salva com sucesso! ✓');
-      }
-    } catch (e) {
-      console.error(e);
-      showAlert('Erro', 'Erro ao salvar conta ZapSign.');
-    }
-  };
-
-  const handleDeleteZapAccount = (id: string) => {
-    showConfirm("Excluir Conta", "Tem certeza que deseja remover esta conta ZapSign?", async () => {
-      try {
-        const res = await fetch(`/api/zapsign/accounts/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (res.ok) fetchZapAccounts();
-      } catch (e) { console.error(e); }
-    });
-  };
-
-  const handleResetQuotas = () => {
-    showConfirm("Zerar Saldo", "Deseja zerar o contador de TODAS as contas para o novo mês?", async () => {
-      try {
-        const res = await fetch('/api/zapsign/accounts/reset', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (res.ok) fetchZapAccounts();
-      } catch (e) { console.error(e); }
-    });
-  };
 
   const handleSaveAll = async () => {
     setIsSavingAll(true);
@@ -110,6 +47,61 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
     a.download = `wedding_adviser_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const backup = JSON.parse(content);
+
+        if (!backup.settings || !backup.data) {
+          showAlert('Erro no Backup', 'O arquivo selecionado não parece ser um backup válido deste sistema.');
+          return;
+        }
+
+        showConfirm(
+          "Restaurar Backup?",
+          "Isso irá substituir todas as suas configurações atuais pelos dados do arquivo. Deseja continuar?",
+          async () => {
+            setSettings(backup.settings);
+            // O salvamento no banco ocorrerá quando o usuário clicar em "Salvar Tudo"
+            showAlert('Backup Carregado', 'Os dados do arquivo foram carregados com sucesso! Clique em "SALVAR TUDO" no final da página para persistir as alterações.');
+          }
+        );
+      } catch (err) {
+        showAlert('Erro ao Importar', 'Não foi possível ler o arquivo de backup.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleEmailBackup = async () => {
+    setIsEmailBackupLoading(true);
+    try {
+      const res = await fetch('/api/admin/backup/email', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (res.ok) {
+        showAlert('Sucesso!', 'O backup completo foi enviado para o seu e-mail (rodrigoindalecio@hotmail.com). Verifique sua caixa de entrada.');
+      } else {
+        const err = await res.json();
+        showAlert('Erro no Backup', err.error || 'Não foi possível enviar o backup por e-mail.');
+      }
+    } catch (e) {
+      showAlert('Erro de Conexão', 'Erro ao tentar se comunicar com o servidor de backup.');
+    } finally {
+      setIsEmailBackupLoading(false);
+    }
   };
 
   const addItem = (list: 'services' | 'partners' | 'locations', value: string | { name: string; address: string }) => {
@@ -155,12 +147,6 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
             <TrendingUp className="w-5 h-5" /> Metas & Regras
           </button>
           <button
-            onClick={() => setActiveTab('zapSignAccounts')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'zapSignAccounts' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-emerald-600/5 hover:bg-slate-50'}`}
-          >
-            <ShieldCheck className="w-5 h-5" /> Contas ZapSign
-          </button>
-          <button
             onClick={() => setActiveTab('system')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'system' ? 'bg-[#883545] text-white shadow-lg' : 'bg-white text-slate-600 border border-[#883545]/5 hover:bg-slate-50'}`}
           >
@@ -170,126 +156,6 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
 
         {/* Content Area */}
         <div className="flex-1 bg-white p-6 lg:p-10 rounded-3xl border border-[#883545]/10 shadow-sm min-h-[500px]">
-          {activeTab === 'zapSignAccounts' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Contas ZapSign</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gerencie seus tokens e limites de contrato</p>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleResetQuotas} className="px-4 py-2 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-200 hover:bg-amber-100 transition-all">
-                    Zerar Mês
-                  </button>
-                  <button onClick={() => { setEditingZap(null); setIsZapModalOpen(true); }} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Nova Conta
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {zapAccounts.map(acc => {
-                  const used = acc.monthly_used || 0;
-                  const limit = acc.monthly_limit || 3;
-                  const pct = Math.min(100, (used / limit) * 100);
-                  const isFull = used >= limit;
-
-                  return (
-                    <div key={acc.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-4 relative overflow-hidden group">
-                      <div className={`absolute top-0 right-0 w-1 h-full ${isFull ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                      
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-sm font-black text-slate-800 uppercase">{acc.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 font-mono mt-1">{acc.api_key}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <button onClick={() => { setEditingZap(acc); setIsZapModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 transition-colors">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDeleteZapAccount(acc.id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Uso no Mês</span>
-                          <span className={`text-xs font-black ${isFull ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {used} / {limit} contratos
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${pct}%` }}
-                            className={`h-full ${isFull ? 'bg-rose-500' : 'bg-emerald-500'}`} 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {zapAccounts.length === 0 && !zapLoading && (
-                <div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
-                  Nenhuma conta ZapSign cadastrada. Clique em "Nova Conta" para começar.
-                </div>
-              )}
-
-              {/* Modal de Conta ZapSign */}
-              <AnimatePresence>
-                {isZapModalOpen && (
-                  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsZapModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 lg:p-8 space-y-6">
-                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">
-                        {editingZap ? 'Editar Conta' : 'Nova Conta ZapSign'}
-                      </h3>
-                      <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const data = new FormData(e.currentTarget);
-                        handleSaveZapAccount({
-                          id: editingZap?.id,
-                          name: data.get('name'),
-                          api_key: data.get('api_key'),
-                          monthly_limit: Number(data.get('limit')) || 3,
-                          monthly_used: editingZap ? Number(data.get('used')) : 0
-                        });
-                      }} className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Identificador</label>
-                          <input name="name" defaultValue={editingZap?.name} required placeholder="Ex: Conta Principal" className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-[#883545]">API Token</label>
-                          <input name="api_key" defaultValue={editingZap?.api_key} required placeholder="Token da ZapSign..." className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Limite Mensal</label>
-                            <input name="limit" type="number" defaultValue={editingZap?.monthly_limit || 3} className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
-                          </div>
-                          {editingZap && (
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Uso Atual</label>
-                              <input name="used" type="number" defaultValue={editingZap?.monthly_used || 0} className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-3 pt-4">
-                          <button type="button" onClick={() => setIsZapModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest">Cancelar</button>
-                          <button type="submit" className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200">Salvar Conta</button>
-                        </div>
-                      </form>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Informações Gerais</h3>
@@ -346,17 +212,33 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                     />
                   </label>
                 </div>
-                <div>
-                  <p className="text-sm font-black text-slate-700">Logo da Assessoria</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Recomendado: PNG ou JPG (quadrado)</p>
-                  {settings.profile.logo && (
-                    <button
-                      onClick={() => setSettings({ ...settings, profile: { ...settings.profile, logo: '' } })}
-                      className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mt-2 hover:underline"
-                    >
-                      Remover Logo
-                    </button>
-                  )}
+                <div className="flex-1 space-y-3">
+                  <div className="flex flex-col">
+                    <p className="text-sm font-black text-slate-700">Logo da Assessoria</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Recomendado: PNG ou JPG (quadrado)</p>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black text-[#883545] uppercase tracking-widest">Link da Imagem (Opção Recomendada):</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://exemplo.com/logo.png"
+                        className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold shadow-sm focus:ring-2 focus:ring-[#883545]/20 outline-none"
+                        value={settings.profile.logo || ''}
+                        onChange={(e) => setSettings({ ...settings, profile: { ...settings.profile, logo: e.target.value } })}
+                      />
+                      {settings.profile.logo && (
+                        <button
+                          onClick={() => setSettings({ ...settings, profile: { ...settings.profile, logo: '' } })}
+                          className="px-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-100 transition-colors"
+                          title="Remover Logo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -724,58 +606,21 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
               </section>
 
               <section className="space-y-6 pt-6 border-t border-slate-100">
-                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Integração ZapSign</h3>
+                <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Integração Autentique</h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Token (ZapSign)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">API Token (Autentique)</label>
                     <input
                       type="password"
-                      placeholder="Cole seu token aqui..."
-                      value={settings.zapsignToken}
-                      onChange={e => setSettings({ ...settings, zapsignToken: e.target.value })}
+                      placeholder="Cole seu token do Autentique aqui..."
+                      value={settings.autentiqueToken || ''}
+                      onChange={e => setSettings({ ...settings, autentiqueToken: e.target.value })}
                       className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold shadow-inner focus:ring-2 focus:ring-[#883545]/20 outline-none"
                     />
                   </div>
-                  
-                  <div className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-lg shadow-sm">
-                        <Sparkles className="w-5 h-5 text-amber-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-amber-900">Modo Sandbox (Testes)</p>
-                        <p className="text-[10px] font-bold text-amber-900/60">Contratos gerados não terão validade jurídica</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setSettings({ ...settings, isSandbox: !settings.isSandbox })}
-                      className={`w-12 h-6 rounded-full transition-all relative ${settings.isSandbox ? 'bg-amber-500' : 'bg-slate-300'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.isSandbox ? 'left-7' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={async () => {
-                      showConfirm("Limpar Token", "Deseja remover PERMANENTEMENTE seu token pessoal e voltar a usar as contas coletivas?", async () => {
-                        try {
-                          const res = await fetch('/api/zapsign/reset-personal', {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${authToken}` }
-                          });
-                          if (res.ok) {
-                            setSettings({ ...settings, zapsignToken: '' });
-                            showAlert('Sucesso', 'Token removido com sucesso! Agora você está usando as contas oficiais da Vanessa.');
-                          }
-                        } catch (e) { showAlert('Erro', 'Falha ao remover token.'); }
-                      });
-                    }}
-                    className="w-full py-4 border-2 border-rose-100 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all"
-                  >
-                    Remover meu Token Pessoal (Hard Reset)
-                  </button>
                 </div>
               </section>
+
 
               <section className="space-y-6 pt-6 border-t border-slate-100">
                 <h3 className="text-lg font-black text-rose-800 uppercase tracking-widest">Backup & Segurança</h3>
@@ -787,8 +632,36 @@ const SettingsView = ({ settings, setSettings, data, userProfile, setUserProfile
                     onClick={handleExport}
                     className="w-full flex items-center justify-center gap-3 py-4 bg-white text-rose-700 border border-rose-200 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-100 transition-all"
                   >
-                    <LogOut className="w-4 h-4 rotate-90" /> Exportar Todos os Dados
+                    <Download className="w-4 h-4" /> Exportar Backup (Download)
                   </button>
+
+                  <label className="w-full flex items-center justify-center gap-3 py-4 bg-rose-100 text-rose-800 border border-rose-200 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-rose-200 transition-all cursor-pointer">
+                    <RefreshCw className="w-4 h-4" /> Restaurar Backup (Upload)
+                    <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+                  </label>
+
+                  <div className="pt-4 border-t border-rose-100">
+                    <button
+                      onClick={handleEmailBackup}
+                      disabled={isEmailBackupLoading}
+                      className="w-full flex items-center justify-center gap-3 py-4 bg-[#883545] text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#883545]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isEmailBackupLoading ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Enviando Backup...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          Enviar Backup Completo p/ meu E-mail
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] font-bold text-center text-slate-400 mt-3 uppercase tracking-widest">
+                      Agendamento automático: Todas as segundas às 08:00
+                    </p>
+                  </div>
                 </div>
               </section>
             </div>
@@ -1370,7 +1243,6 @@ export const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes,
                 )}
               </div>
 
-              {/* Contato para ZapSign */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">E-mail para assinatura</label>
@@ -1384,7 +1256,7 @@ export const BrideModal = ({ isOpen, onClose, onSave, brideToEdit, serviceTypes,
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp (ZapSign)</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp (Contrato)</label>
                   <input
                     type="tel"
                     placeholder="(00) 00000-0000"
