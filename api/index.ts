@@ -1574,8 +1574,6 @@ app.post("/api/admin/backup/email", async (req, res) => {
     }
 });
 
-export default app;
-
 // Função para iniciar o servidor (usada localmente)
 export async function startServer() {
     const rootDir = process.cwd();
@@ -1601,11 +1599,6 @@ export async function startServer() {
         console.log(`Server running on http://localhost:${PORT}`);
         console.log(`API available at http://localhost:${PORT}/api`);
     });
-}
-
-// Inicia o servidor local se não estiver na Vercel
-if (process.env.NODE_ENV !== "production") {
-    startServer();
 }
 
 export default app;
