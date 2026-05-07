@@ -1,6 +1,5 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import { autentiqueService } from "./autentiqueService";
 import dotenv from "dotenv";
 import path from "path";
 
@@ -1239,6 +1238,7 @@ app.post("/api/contracts/preview", requireAuth, async (req, res) => {
             textToRender = template?.template_text;
         }
 
+        const { autentiqueService } = await import("./autentiqueService");
         const rendered = await autentiqueService.renderTemplate(textToRender, bride_id);
         res.json({ rendered });
     } catch (err: any) {
@@ -1327,8 +1327,7 @@ app.post("/api/contracts/:id/send-autentique", requireAuth, async (req: any, res
             return res.status(400).json({ error: 'E-mail do cliente é obrigatório para o Autentique. Atualize o cadastro da cliente.' });
         }
         
-        console.log(`[API AUTENTIQUE] Passo 6: Chamando autentiqueService...`);
-        
+        const { autentiqueService } = await import("./autentiqueService");
         const result = await autentiqueService.sendToAutentique(id, 'noiva', { autentiqueToken: apiToken, isSandbox });
         
         console.log(`[API AUTENTIQUE] ====== SUCESSO ====== ID: ${result?.id}`);
@@ -1371,6 +1370,7 @@ app.get("/api/contracts/:id/autentique-status", requireAuth, async (req: any, re
 
         if (!apiToken) return res.status(400).json({ error: "Token do Autentique não configurado." });
 
+        const { autentiqueService } = await import("./autentiqueService");
         const document = await autentiqueService.getDocumentStatus(contract.autentique_document_id, apiToken, isSandbox);
         return res.json(document);
     } catch (e: any) {
@@ -1389,6 +1389,7 @@ app.post("/api/contracts/:id/resend", requireAuth, async (req: any, res: any) =>
         const apiToken = userData?.user?.user_metadata?.app_settings?.autentiqueToken;
         if (!apiToken) return res.status(400).json({ error: "Token do Autentique não configurado." });
 
+        const { autentiqueService } = await import("./autentiqueService");
         const result = await autentiqueService.resendSignatures(public_ids, apiToken);
         return res.json({ success: result });
     } catch (e: any) {
@@ -1425,6 +1426,7 @@ app.put("/api/contracts/:id/update-autentique", requireAuth, async (req: any, re
         if (refusable !== undefined) updates.refusable = refusable;
         if (deadline_at) updates.deadline_at = deadline_at;
 
+        const { autentiqueService } = await import("./autentiqueService");
         const result = await autentiqueService.updateDocument(contract.autentique_document_id, updates, apiToken);
         return res.json(result);
     } catch (e: any) {
