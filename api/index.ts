@@ -71,21 +71,23 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password });
+    const session = data?.session;
+    const user = data?.user;
 
-    if (error || !data.session) {
+    if (error || !session || !user) {
         console.error('[AUTH] Login falhou:', error?.message);
         return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
     }
 
     // Retorna apenas o token e dados básicos do usuário - SEM SENHA
     return res.json({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        expires_at: data.session.expires_at,
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
         user: {
-            id: data.user.id,
-            email: data.user.email,
-            name: data.user.user_metadata?.name || data.user.email
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.email
         }
     });
 });
