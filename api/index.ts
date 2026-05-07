@@ -1,9 +1,9 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import { backupService } from "./backupService";
 import { autentiqueService } from "./autentiqueService";
 import dotenv from "dotenv";
 import path from "path";
+
 
 dotenv.config();
 
@@ -25,11 +25,16 @@ const supabaseAdmin = createClient(supabaseUrl || "https://placeholder.supabase.
 const app = express();
 app.use(express.json());
 
-// Logger global - captura TODA requisição que chega ao Express
+// Logger global e CORS - captura TODA requisição que chega ao Express
 app.use((req: any, res: any, next: any) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') return res.status(200).end();
     console.log(`[REQ] ${req.method} ${req.path}`);
     next();
 });
+
 
 // --- Middleware de Autenticação (Apenas para Área Administrativa) ---
 const requireAuth = async (req: any, res: any, next: any) => {
@@ -250,7 +255,7 @@ app.get("/api/settings", requireAuth, async (req, res) => {
     const user = (req as any).user;
     
     // Roda a verificação de backup em background (sem travar a resposta da API)
-    backupService.checkAndRunLazyBackup();
+    import('./backupService').then(m => m.backupService.checkAndRunLazyBackup()).catch(() => {});
 
     const { data: { user: latestUser }, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
 
@@ -1541,6 +1546,7 @@ app.post("/api/admin/backup/email", async (req, res) => {
 
         if (isVercelCron) {
             console.log('[BACKUP] Disparado automaticamente pela Vercel Cron.');
+            const { backupService } = await import('./backupService');
             await backupService.sendBackupEmail('rodrigoindalecio@hotmail.com');
             return res.json({ success: true, message: "Backup automático enviado!" });
         }
@@ -1557,6 +1563,7 @@ app.post("/api/admin/backup/email", async (req, res) => {
             return res.status(403).json({ error: "Acesso negado." });
         }
 
+        const { backupService } = await import('./backupService');
         await backupService.sendBackupEmail(user.email);
         res.json({ success: true, message: "Backup manual enviado com sucesso!" });
     } catch (err: any) {
