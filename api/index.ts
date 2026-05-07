@@ -1602,3 +1602,10 @@ export async function startServer() {
         console.log(`API available at http://localhost:${PORT}/api`);
     });
 }
+
+// Inicia o servidor local se não estiver na Vercel
+if (process.env.NODE_ENV !== "production") {
+    startServer();
+}
+
+export default app;

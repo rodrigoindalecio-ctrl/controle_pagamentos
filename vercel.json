@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.ts" }
+  ],
   "crons": [
     {
       "path": "/api/admin/backup/email",
