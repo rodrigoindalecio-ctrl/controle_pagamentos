@@ -5,29 +5,24 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
-import { autentiqueService } from "./autentiqueService.js";
-// Dependências excluídas para Vercel Deploy
+import { autentiqueService } from "./autentiqueService";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Validação de variáveis de ambiente para evitar crash 500 na Vercel
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-console.log("-----------------------------------------");
-console.log("!!! SERVIDOR ATUALIZADO (v3.0 - Autentique Fix) !!!");
-console.log("-----------------------------------------");
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("❌ ERRO CRÍTICO: SUPABASE_URL ou SUPABASE_ANON_KEY não configurados!");
+}
 
 // Cliente padrão (anon) para operações de dados
-const supabase = createClient(
-    process.env.SUPABASE_URL || "",
-    process.env.SUPABASE_ANON_KEY || ""
-);
+const supabase = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseAnonKey || "placeholder");
 
-// Cliente admin (service_role) para autenticação server-side - NUNCA expor no front-end
-const supabaseAdmin = createClient(
-    process.env.SUPABASE_URL || "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+// Cliente admin (service_role) para autenticação server-side
+const supabaseAdmin = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseServiceKey || "placeholder");
 
 const app = express();
 app.use(express.json());
@@ -1511,7 +1506,8 @@ app.get("/api/debug/reset-metadata", async (req, res) => {
         const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
         if (listError) throw listError;
 
-        const user = users.find(u => u.email === email);
+        // Correção para erro de TypeScript na Vercel (tipo 'never')
+        const user = (users as any[]).find((u: any) => u.email === email);
         if (!user) return res.status(404).send("Usuário não encontrado.");
 
         // 2. Limpa APENAS a logo pesada, preservando o resto das configurações
