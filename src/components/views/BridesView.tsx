@@ -387,7 +387,7 @@ export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAl
 
   useEffect(() => {
     if (isOpen && bride) {
-      fetchContract(bride);
+      fetchContract(bride, true);
     } else {
       setContract(null);
       setShowGenerationFlow(false);
@@ -397,7 +397,7 @@ export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAl
     }
   }, [isOpen, bride]);
 
-  const fetchContract = async (currentBride: Bride) => {
+  const fetchContract = async (currentBride: Bride, autoOpen = false) => {
     setIsLoading(true);
     try {
       const res = await authFetch('/api/contracts');
@@ -411,8 +411,8 @@ export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAl
           if (fullRes.ok) setContract(await fullRes.json());
         } else {
           setContract(null);
-          // Se não tem contrato, já abre direto o fluxo de geração para poupar um clique
-          setShowGenerationFlow(true);
+          // Se não tem contrato, e autoOpen for true, abre o fluxo
+          if (autoOpen) setShowGenerationFlow(true);
         }
       }
     } catch (err) {
@@ -575,7 +575,7 @@ export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAl
           {showGenerationFlow ? (
             <ContractModal 
               isOpen={true} 
-              onClose={() => { setShowGenerationFlow(false); fetchContract(bride); }} 
+              onClose={() => { setShowGenerationFlow(false); fetchContract(bride, false); }} 
               bride={bride} 
               authFetch={authFetch} 
               showAlert={showAlert} 
