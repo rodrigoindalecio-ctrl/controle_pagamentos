@@ -775,7 +775,7 @@ export const ContractDetailsModal = ({ isOpen, onClose, bride, authFetch, showAl
   );
 };
 
-export const ClientSummaryModal = ({ isOpen, onClose, bride, payments, onEdit }: { isOpen: boolean, onClose: () => void, bride: Bride | null, payments: Payment[], onEdit: (b: Bride) => void }) => {
+export const ClientSummaryModal = ({ isOpen, onClose, bride, payments, onEdit, onOpenContract }: { isOpen: boolean, onClose: () => void, bride: Bride | null, payments: Payment[], onEdit: (b: Bride) => void, onOpenContract: (b: Bride) => void }) => {
   if (!isOpen || !bride) return null;
 
   const bridePayments = payments.filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago');
@@ -980,8 +980,14 @@ export const ClientSummaryModal = ({ isOpen, onClose, bride, payments, onEdit }:
                 Fechar
               </button>
               <button 
+                onClick={() => { onOpenContract(bride); onClose(); }} 
+                className="flex-1 py-4 bg-white border border-[#883545]/20 text-[#883545] text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-[#883545]/5 transition-all flex items-center justify-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> Gerar/Ver Contrato
+              </button>
+              <button 
                 onClick={() => { onEdit(bride); onClose(); }} 
-                className="flex-[2] py-4 bg-[#883545] text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#883545]/20 transition-all flex items-center justify-center gap-2"
+                className="flex-[1.5] py-4 bg-[#883545] text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#883545]/20 transition-all flex items-center justify-center gap-2"
               >
                 <Edit className="w-4 h-4" /> Editar Cadastro Completo
               </button>
@@ -1578,6 +1584,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         bride={brideForModal}
         payments={payments}
         onEdit={onEdit}
+        onOpenContract={(b) => {
+          setBrideForModal(b);
+          setIsContractDetailsModalOpen(true);
+        }}
       />
     </motion.div >
   );
