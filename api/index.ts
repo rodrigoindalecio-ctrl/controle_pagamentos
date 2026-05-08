@@ -129,7 +129,7 @@ app.post("/api/public/webhooks/autentique", async (req, res) => {
     console.log(`[AUTENTIQUE WEBHOOK] Evento recebido: ${event.type}`);
 
     try {
-        const docId = event.data?.document || event.data?.id || event.data?.object?.id;
+        const docId = event.data?.public_id || event.data?.document || event.data?.id || event.data?.object?.id;
         if (!docId) throw new Error("ID do documento não encontrado no evento");
 
         // Busca o contrato no banco
