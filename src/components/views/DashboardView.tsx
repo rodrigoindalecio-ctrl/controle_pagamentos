@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import DoughnutChart from "../../DoughnutChart";
 import GhostLinesChart from "../../GhostLinesChart";
-import { Header, StatCard, parseDate } from "../../App";
+import { Header, StatCard, parseDate, formatDisplayDate } from "../../App";
 import { Bride, Payment, DashboardStats, AppSettings } from "../../types";
-import { Calendar, TrendingUp, Wallet, Clock, Settings, Plus, CircleDollarSign, CheckCircle, XCircle, UserMinus, Award, Trophy, ChevronDown, X, Users, Heart } from "lucide-react";
+import { Calendar, TrendingUp, Wallet, Clock, Settings, Plus, CircleDollarSign, CheckCircle, XCircle, UserMinus, Award, Trophy, ChevronDown, X, Users, Heart, FileText } from "lucide-react";
 
 const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilterYear, filterMonth, setFilterMonth, settings, userProfile, isLoading }: { stats: DashboardStats | null, payments: Payment[], brides: Bride[], onViewAll: () => void, filterYear: string, setFilterYear: (y: string) => void, filterMonth: string, setFilterMonth: (m: string) => void, settings: AppSettings, key?: string, userProfile: any, isLoading?: boolean }) => {
   const currentYear = new Date().getFullYear();
@@ -99,7 +99,7 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
   // --- Conversão de Novos Contratos ---
   const yearsToCompare = [Number(filterYear), Number(filterYear) + 1, Number(filterYear) + 2];
   const yearlyContracts = yearsToCompare.reduce((acc, year) => {
-    acc[year] = brides.filter(b => b.created_at && new Date(b.created_at).getFullYear() === year).length;
+    acc[year] = brides.filter(b => b.created_at && parseDate(b.created_at)?.getFullYear() === year).length;
     return acc;
   }, {} as any);
 
@@ -110,7 +110,8 @@ const DashboardView = ({ stats, payments, brides, onViewAll, filterYear, setFilt
 
   const novosContratos = brides.filter(b => {
     if (!b.created_at) return false;
-    const created = new Date(b.created_at);
+    const created = parseDate(b.created_at);
+    if (!created) return false;
     const year = created.getFullYear();
     const month = created.getMonth() + 1;
     if (filterMonth === 'all') return String(year) === filterYear;
@@ -873,13 +874,108 @@ const CancellationsModal = ({ isOpen, onClose, brides, filterYear }: { isOpen: b
   );
 };
 
+const MonthlyContractsModal = ({ isOpen, onClose, year, month, monthLabel, brides }: { isOpen: boolean, onClose: () => void, year: number, month: number, monthLabel: string, brides: Bride[] }) => {
+  if (!isOpen) return null;
+
+  const filteredBrides = brides.filter(b => {
+    const createdDate = parseDate(b.created_at);
+    if (!createdDate || createdDate.getFullYear() !== year) return false;
+    if (month > 0 && createdDate.getMonth() + 1 !== month) return false;
+    return true;
+  });
+
+  const title = month > 0 ? `Contratos: ${monthLabel} / ${year}` : `Contratos: Todos de ${year}`;
+  const totalLabel = month > 0 ? "Valor Total no Mês" : "Valor Total no Ano";
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 lg:p-8"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white w-full max-w-2xl max-h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-slate-100"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="p-6 lg:p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-[#883545] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#883545]/20">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-800 tracking-tight">{title}</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                  {filteredBrides.length} {filteredBrides.length === 1 ? 'Contrato Fechado' : 'Contratos Fechados'}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-[#883545]">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-auto p-4 lg:p-6">
+            {filteredBrides.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 italic font-bold">Nenhum contrato encontrado.</div>
+            ) : (
+              <table className="w-full text-left border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    <th className="pb-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Cliente</th>
+                    <th className="pb-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Tipo de Serviço</th>
+                    <th className="pb-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Fechamento</th>
+                    <th className="pb-4 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right border-b border-slate-50">Valor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredBrides.map((b, i) => (
+                    <tr key={i} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 px-4 text-sm font-bold text-slate-800 group-hover:text-[#883545] transition-colors uppercase tracking-tighter">{b.name}</td>
+                      <td className="py-4 px-4">
+                        <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                          {b.service_type || 'Não definido'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-xs font-bold text-slate-500">{formatDisplayDate(b.created_at)}</td>
+                      <td className="py-4 px-4 text-sm font-black text-slate-900 text-right">
+                        R$ {Number(b.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          
+          <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{totalLabel}</span>
+            <span className="text-xl font-black text-[#883545]">
+              R$ {filteredBrides.reduce((acc, b) => acc + (Number(b.contract_value) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 const ContractsModal = ({ isOpen, onClose, brides, months }: { isOpen: boolean, onClose: () => void, brides: Bride[], months: any[] }) => {
+  const [selectedDetail, setSelectedDetail] = useState<{ month: number, year: number, label: string } | null>(null);
   const years = [2024, 2025, 2026];
   const tableData = months.map(m => {
     const monthIndex = Number(m.value);
-    const row: any = { label: m.label, values: {} };
+    const row: any = { label: m.label, monthIndex, values: {} };
     years.forEach(year => {
-      row.values[year] = brides.filter(b => b.created_at && new Date(b.created_at).getFullYear() === year && new Date(b.created_at).getMonth() + 1 === monthIndex).length;
+      row.values[year] = brides.filter(b => {
+        const createdDate = parseDate(b.created_at);
+        return createdDate && createdDate.getFullYear() === year && createdDate.getMonth() + 1 === monthIndex;
+      }).length;
     });
     return row;
   });
@@ -931,7 +1027,11 @@ const ContractsModal = ({ isOpen, onClose, brides, months }: { isOpen: boolean, 
                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-1 px-3 text-[10px] font-bold text-slate-600 uppercase tracking-tighter">{row.label}</td>
                       {years.map(year => (
-                        <td key={year} className={`py-1 px-3 text-xs font-black text-center ${row.values[year] > 0 ? 'text-[#883545]' : 'text-slate-300'}`}>
+                        <td 
+                          key={year} 
+                          onClick={() => row.values[year] > 0 && setSelectedDetail({ month: row.monthIndex, year, label: row.label })}
+                          className={`py-1 px-3 text-xs font-black text-center ${row.values[year] > 0 ? 'text-[#883545] cursor-pointer hover:scale-125 transition-transform' : 'text-slate-300'}`}
+                        >
                           {row.values[year] || '-'}
                         </td>
                       ))}
@@ -942,7 +1042,13 @@ const ContractsModal = ({ isOpen, onClose, brides, months }: { isOpen: boolean, 
                   <tr className="bg-slate-50/80 border-t-2 border-slate-100">
                     <td className="py-2 px-3 text-[10px] font-black text-[#883545] uppercase">Total Geral</td>
                     {years.map(year => (
-                      <td key={year} className="py-2 px-3 text-sm font-black text-[#883545] text-center">{totals[year]}</td>
+                      <td 
+                        key={year} 
+                        onClick={() => totals[year] > 0 && setSelectedDetail({ month: 0, year, label: 'Ano' })}
+                        className="py-2 px-3 text-sm font-black text-[#883545] text-center cursor-pointer hover:scale-110 transition-transform"
+                      >
+                        {totals[year]}
+                      </td>
                     ))}
                   </tr>
                   <tr className="bg-[#883545] text-white">
@@ -958,6 +1064,15 @@ const ContractsModal = ({ isOpen, onClose, brides, months }: { isOpen: boolean, 
             <div className="p-2 bg-slate-50 text-center shrink-0 border-t border-slate-100">
               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest italic tracking-[0.1em]">Valores baseados na data de criação do registro no sistema</p>
             </div>
+
+            <MonthlyContractsModal
+              isOpen={!!selectedDetail}
+              onClose={() => setSelectedDetail(null)}
+              year={selectedDetail?.year || 0}
+              month={selectedDetail?.month || 0}
+              monthLabel={selectedDetail?.label || ''}
+              brides={brides}
+            />
           </motion.div>
         </div>
       )}

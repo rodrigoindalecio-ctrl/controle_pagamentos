@@ -809,6 +809,8 @@ export const ClientSummaryModal = ({ isOpen, onClose, bride, payments, onEdit, o
                       {bride.status}
                     </span>
                     <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest italic">ID: {bride.id}</span>
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-2">•</span>
+                    <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest ml-2 italic">Fechado em: {formatDisplayDate(bride.created_at)}</span>
                   </div>
                   
                   {/* Dynamic Labels based on couple type */}
