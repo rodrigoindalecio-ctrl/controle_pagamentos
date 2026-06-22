@@ -758,7 +758,16 @@ const FinanceModal = ({
               )
             )}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</label>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, description: 'Assessoria' })}
+                  className="text-[9px] font-black uppercase tracking-widest text-[#883545] bg-[#883545]/5 hover:bg-[#883545]/10 px-2.5 py-1 rounded-lg transition-all border border-[#883545]/10 active:scale-95 cursor-pointer"
+                >
+                  Assessoria
+                </button>
+              </div>
               <input
                 required
                 type="text"
