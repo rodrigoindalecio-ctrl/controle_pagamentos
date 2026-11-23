@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Bride, Payment, AppSettings, ContractTemplate, Contract } from "../../types";
-import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus, FileCheck, RefreshCw, RotateCcw } from "lucide-react";
+import { Eye, Edit, Trash2, CheckCircle, XCircle, ChevronDown, User, Calendar, MapPin, Sparkles, Filter, Search, Plus, FileText, ChevronRight, X, AlertCircle, Download, Send, CircleDollarSign, TrendingDown, Heart, Clock, Users, Award, Wallet, MoreVertical, UserMinus, FileCheck, RefreshCw, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { parseDate, formatDisplayDate, generateContractPDF, normalizeString } from "../../App";
 import { Header } from "../../App";
 
@@ -1008,6 +1008,17 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
   const [balanceFilter, setBalanceFilter] = useState('Todos');
   const [localFilter, setLocalFilter] = useState('Todos');
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [sortField, setSortField] = useState<'name' | 'event_date' | 'event_location' | 'service_type' | 'contract_value' | 'totalPaid' | 'balance' | 'status'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: 'name' | 'event_date' | 'event_location' | 'service_type' | 'contract_value' | 'totalPaid' | 'balance' | 'status') => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
   const [isDistratoModalOpen, setIsDistratoModalOpen] = useState(false);
   const [isContractDetailsModalOpen, setIsContractDetailsModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -1023,31 +1034,91 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
     return () => window.removeEventListener('open-contract', handleOpenContract);
   }, []);
 
+  const paymentsByBride = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const p of payments) {
+      if ((p.status || '').trim().toLowerCase() === 'pago') {
+        const val = Number(p.amount_paid) || 0;
+        map.set(p.bride_id, (map.get(p.bride_id) || 0) + val);
+      }
+    }
+    return map;
+  }, [payments]);
+
   const calculateBalance = (bride: Bride) => {
-    const totalPaid = payments
-      .filter(p => p.bride_id === bride.id && (p.status || '').trim().toLowerCase() === 'pago')
-      .reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+    const totalPaid = paymentsByBride.get(bride.id) || 0;
     return {
       totalPaid,
       balance: Math.max(0, (Number(bride.contract_value) || 0) - totalPaid)
     };
   };
 
-  const filteredBrides = brides.filter(b => {
-    if (b.id === 58) return false; // Esconde o cliente de BV da lista
-    const normalizedSearch = normalizeString(searchTerm);
-    const matchesSearch = normalizeString(b.name).includes(normalizedSearch) || 
-                          normalizeString(b.spouse_name || '').includes(normalizedSearch) ||
-                          normalizeString(b.email || '').includes(normalizedSearch) ||
-                          (b.event_date ? parseDate(b.event_date)?.toLocaleDateString('pt-BR').includes(searchTerm) : false) ||
-                          (b.event_date || '').includes(searchTerm);
-    const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;
-    const matchesYear = yearFilter === 'Todos' || (b.event_date || '').startsWith(yearFilter);
-    const matchesBalance = balanceFilter === 'Todos' || (balanceFilter === 'Com Pendência' ? b.balance > 1 : b.balance <= 1);
-    const matchesLocal = localFilter === 'Todos' || b.event_location === localFilter;
+  const filteredBrides = useMemo(() => {
+    return brides.filter(b => {
+      if (b.id === 58) return false; // Esconde o cliente de BV da lista
+      const normalizedSearch = normalizeString(searchTerm);
+      const matchesSearch = normalizeString(b.name).includes(normalizedSearch) || 
+                            normalizeString(b.spouse_name || '').includes(normalizedSearch) ||
+                            normalizeString(b.email || '').includes(normalizedSearch) ||
+                            (b.event_date ? parseDate(b.event_date)?.toLocaleDateString('pt-BR').includes(searchTerm) : false) ||
+                            (b.event_date || '').includes(searchTerm);
+      const matchesStatus = statusFilter === 'Todos' || b.status === statusFilter;
+      const matchesYear = yearFilter === 'Todos' || (b.event_date || '').startsWith(yearFilter);
+      
+      const { totalPaid, balance } = calculateBalance(b);
+      const matchesBalance = balanceFilter === 'Todos' ||
+        (balanceFilter === 'Sem Entrada (R$ 0 Pago)' ? totalPaid <= 0 :
+         balanceFilter === 'Com Pendência' ? balance > 1 :
+         (balanceFilter === 'Sem Pendência' || balanceFilter === 'Sem Pendência (Quitado)') ? balance <= 1 :
+         balanceFilter === 'Parcialmente Pago' ? (totalPaid > 0 && balance > 1) : true);
 
-    return matchesSearch && matchesStatus && matchesYear && matchesBalance && matchesLocal;
-  }).sort((a, b) => a.name.localeCompare(b.name));
+      const matchesLocal = localFilter === 'Todos' || b.event_location === localFilter;
+
+      return matchesSearch && matchesStatus && matchesYear && matchesBalance && matchesLocal;
+    });
+  }, [brides, searchTerm, statusFilter, yearFilter, balanceFilter, localFilter, paymentsByBride]);
+
+  const sortedBrides = useMemo(() => {
+    return [...filteredBrides].sort((a, b) => {
+      let comparison = 0;
+      const finA = calculateBalance(a);
+      const finB = calculateBalance(b);
+
+      switch (sortField) {
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '', 'pt-BR');
+          break;
+        case 'event_date': {
+          const timeA = a.event_date ? (parseDate(a.event_date)?.getTime() || 0) : 0;
+          const timeB = b.event_date ? (parseDate(b.event_date)?.getTime() || 0) : 0;
+          comparison = timeA - timeB;
+          break;
+        }
+        case 'event_location':
+          comparison = (a.event_location || '').localeCompare(b.event_location || '', 'pt-BR');
+          break;
+        case 'service_type':
+          comparison = (a.service_type || '').localeCompare(b.service_type || '', 'pt-BR');
+          break;
+        case 'contract_value':
+          comparison = (Number(a.contract_value) || 0) - (Number(b.contract_value) || 0);
+          break;
+        case 'totalPaid':
+          comparison = finA.totalPaid - finB.totalPaid;
+          break;
+        case 'balance':
+          comparison = finA.balance - finB.balance;
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '', 'pt-BR');
+          break;
+        default:
+          comparison = 0;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredBrides, sortField, sortDirection, paymentsByBride]);
 
   const years = Array.from(new Set(
     brides.filter(b => b.id !== 58).map(b => {
@@ -1161,8 +1232,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
                       onChange={(e) => setBalanceFilter(e.target.value)}
                     >
                       <option>Todos</option>
+                      <option>Sem Entrada (R$ 0 Pago)</option>
                       <option>Com Pendência</option>
-                      <option>Sem Pendência</option>
+                      <option>Sem Pendência (Quitado)</option>
+                      <option>Parcialmente Pago</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
@@ -1270,8 +1343,10 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
               onChange={(e) => setBalanceFilter(e.target.value)}
             >
               <option>Todos</option>
+              <option>Sem Entrada (R$ 0 Pago)</option>
               <option>Com Pendência</option>
-              <option>Sem Pendência</option>
+              <option>Sem Pendência (Quitado)</option>
+              <option>Parcialmente Pago</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
@@ -1307,12 +1382,12 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
       </div>
 
       <div className="lg:hidden space-y-4">
-        {filteredBrides.length === 0 ? (
+        {sortedBrides.length === 0 ? (
           <div className="bg-white p-12 rounded-2xl border border-[#883545]/10 shadow-sm text-center text-slate-400 italic font-medium">
             Nenhum cliente encontrado com os filtros aplicados.
           </div>
         ) : (
-          filteredBrides.map((bride) => {
+          sortedBrides.map((bride) => {
             const { totalPaid, balance } = calculateBalance(bride);
             return (
               <div 
@@ -1430,25 +1505,81 @@ const BridesView = ({ brides, payments, onEdit, onUpdateStatus, onDelete, settin
         <div>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-[10px] lg:text-xs uppercase tracking-wider font-bold border-b border-[#883545]/5">
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Cliente / Casal</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Data Evento</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Local</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Serviço</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[140px]">Valor Contrato</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px]">Pago</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px]">A Pagar</th>
-                <th className="px-4 lg:px-6 py-4 lg:py-5">Status</th>
+              <tr className="bg-slate-50 text-slate-500 text-[10px] lg:text-xs uppercase tracking-wider font-bold border-b border-[#883545]/5 select-none">
+                <th onClick={() => handleSort('name')} className="px-4 lg:px-6 py-4 lg:py-5 cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Cliente">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'name' ? 'text-[#883545] font-black' : ''}>Cliente / Casal</span>
+                    <span className={`transition-opacity ${sortField === 'name' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'name' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('event_date')} className="px-4 lg:px-6 py-4 lg:py-5 cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Data do Evento">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'event_date' ? 'text-[#883545] font-black' : ''}>Data Evento</span>
+                    <span className={`transition-opacity ${sortField === 'event_date' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'event_date' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('event_location')} className="px-4 lg:px-6 py-4 lg:py-5 cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Local">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'event_location' ? 'text-[#883545] font-black' : ''}>Local</span>
+                    <span className={`transition-opacity ${sortField === 'event_location' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'event_location' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('service_type')} className="px-4 lg:px-6 py-4 lg:py-5 cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Tipo de Serviço">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'service_type' ? 'text-[#883545] font-black' : ''}>Serviço</span>
+                    <span className={`transition-opacity ${sortField === 'service_type' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'service_type' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('contract_value')} className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[140px] cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Valor do Contrato">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'contract_value' ? 'text-[#883545] font-black' : ''}>Valor Contrato</span>
+                    <span className={`transition-opacity ${sortField === 'contract_value' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'contract_value' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('totalPaid')} className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px] cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Valor Pago (Menor para Maior para ver quem não pagou)">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'totalPaid' ? 'text-[#883545] font-black' : ''}>Pago</span>
+                    <span className={`transition-opacity ${sortField === 'totalPaid' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'totalPaid' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('balance')} className="px-4 lg:px-6 py-4 lg:py-5 whitespace-nowrap min-w-[120px] cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Saldo a Pagar">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'balance' ? 'text-[#883545] font-black' : ''}>A Pagar</span>
+                    <span className={`transition-opacity ${sortField === 'balance' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'balance' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th onClick={() => handleSort('status')} className="px-4 lg:px-6 py-4 lg:py-5 cursor-pointer hover:bg-[#883545]/5 hover:text-[#883545] transition-colors group" title="Clique para ordenar por Status">
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortField === 'status' ? 'text-[#883545] font-black' : ''}>Status</span>
+                    <span className={`transition-opacity ${sortField === 'status' ? 'opacity-100 text-[#883545]' : 'opacity-0 group-hover:opacity-100 text-slate-400'}`}>
+                      {sortField === 'status' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
                 <th className="px-4 lg:px-6 py-4 lg:py-5 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#883545]/5 font-medium">
-              {filteredBrides.length === 0 ? (
+              {sortedBrides.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-slate-400 italic font-bold">Nenhum cliente encontrado com estes filtros.</td>
                 </tr>
               ) : (
-                filteredBrides.map((bride) => {
+                sortedBrides.map((bride) => {
                   const { totalPaid, balance } = calculateBalance(bride);
                   return (
                     <tr 
